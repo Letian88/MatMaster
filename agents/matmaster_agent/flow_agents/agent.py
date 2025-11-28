@@ -34,6 +34,15 @@ from agents.matmaster_agent.flow_agents.intent_agent.agent import IntentAgent
 from agents.matmaster_agent.flow_agents.intent_agent.model import IntentEnum
 from agents.matmaster_agent.flow_agents.intent_agent.prompt import INTENT_INSTRUCTION
 from agents.matmaster_agent.flow_agents.intent_agent.schema import IntentSchema
+from agents.matmaster_agent.flow_agents.parameters_agent.agent import (
+    ParametersAgent,
+)
+from agents.matmaster_agent.flow_agents.parameters_agent.confirm_prompt import (
+    PARAMETERS_CONFIRM_INSTRUCTION,
+)
+from agents.matmaster_agent.flow_agents.parameters_agent.confirm_schema import (
+    ParametersConfirmSchema,
+)
 from agents.matmaster_agent.flow_agents.plan_confirm_agent.prompt import (
     PlanConfirmInstruction,
 )
@@ -50,7 +59,10 @@ from agents.matmaster_agent.flow_agents.plan_make_agent.prompt import (
 from agents.matmaster_agent.flow_agents.scene_agent.prompt import SCENE_INSTRUCTION
 from agents.matmaster_agent.flow_agents.scene_agent.schema import SceneSchema
 from agents.matmaster_agent.flow_agents.schema import FlowStatusEnum, PlanSchema
-from agents.matmaster_agent.flow_agents.style import plan_ask_confirm_card
+from agents.matmaster_agent.flow_agents.style import (
+    parameters_ask_confirm_card,
+    plan_ask_confirm_card,
+)
 from agents.matmaster_agent.flow_agents.utils import (
     check_plan,
     create_dynamic_plan_schema,
@@ -148,6 +160,26 @@ class MatMasterFlowAgent(LlmAgent):
             instruction=PLAN_INFO_INSTRUCTION,
         )
 
+        self._parameters_agent = ParametersAgent(
+            execution_agent=self._execution_agent,
+            name='parameters_agent',
+            model=MatMasterLlmConfig.default_litellm_model,
+            description='收集计划中所有工具的参数',
+            disallow_transfer_to_parent=True,
+            disallow_transfer_to_peers=True,
+        )
+
+        self._parameters_confirm_agent = SchemaAgent(
+            name='parameters_confirm_agent',
+            model=MatMasterLlmConfig.tool_schema_model,
+            description='判断用户对参数是否认可',
+            instruction=PARAMETERS_CONFIRM_INSTRUCTION,
+            disallow_transfer_to_parent=True,
+            disallow_transfer_to_peers=True,
+            output_schema=ParametersConfirmSchema,
+            state_key='parameters_confirm',
+        )
+
         execution_result_agent = DisallowTransferLlmAgent(
             name='execution_result_agent',
             model=MatMasterLlmConfig.gemini_2_5_pro,  # NOTE: Temporary fix until refactor
@@ -183,6 +215,8 @@ class MatMasterFlowAgent(LlmAgent):
             self.plan_make_agent,
             self.plan_info_agent,
             self.plan_confirm_agent,
+            self.parameters_agent,
+            self.parameters_confirm_agent,
             self.execution_agent,
             self.analysis_agent,
         ]
@@ -223,6 +257,16 @@ class MatMasterFlowAgent(LlmAgent):
     @property
     def plan_confirm_agent(self) -> LlmAgent:
         return self._plan_confirm_agent
+
+    @computed_field
+    @property
+    def parameters_agent(self) -> LlmAgent:
+        return self._parameters_agent
+
+    @computed_field
+    @property
+    def parameters_confirm_agent(self) -> LlmAgent:
+        return self._parameters_confirm_agent
 
     @computed_field
     @property
@@ -356,23 +400,66 @@ class MatMasterFlowAgent(LlmAgent):
                 if ctx.session.state['plan_confirm']['flag']:
                     # 重置 scenes
                     yield update_state_event(ctx, state_delta={'scenes': []})
-                    # 执行计划
-                    if ctx.session.state['plan']['feasibility'] in ['full', 'part']:
-                        async for execution_event in self.execution_agent.run_async(
+
+                    # 阶段3: 提取参数
+                    # 检查是否已经收集过参数
+                    if not ctx.session.state.get('parameters_collection'):
+                        # 收集所有工具的参数（不生成 JSON，等待用户确认）
+                        async for parameters_event in self.parameters_agent.run_async(
                             ctx
                         ):
-                            yield execution_event
+                            yield parameters_event
 
-                    # 全部执行完毕，总结执行情况
-                    if (
-                        check_plan(ctx) == FlowStatusEnum.COMPLETE
-                        or ctx.session.state['plan']['feasibility'] == 'null'
-                    ):
-                        self._analysis_agent.instruction = get_analysis_instruction(
-                            ctx.session.state['plan']
-                        )
-                        async for analysis_event in self.analysis_agent.run_async(ctx):
-                            yield analysis_event
+                    # 阶段4: 用户确认参数
+                    # 检查参数是否已确认
+                    parameters_confirm = ctx.session.state.get(
+                        'parameters_confirm', {}
+                    ).get('flag', False)
+                    if not parameters_confirm:
+                        # 询问用户是否确认参数
+                        for parameters_ask_confirm_event in all_text_event(
+                            ctx, self.name, parameters_ask_confirm_card(), ModelRole
+                        ):
+                            yield parameters_ask_confirm_event
+
+                        # 判断用户是否确认参数
+                        async for (
+                            parameters_confirm_event
+                        ) in self.parameters_confirm_agent.run_async(ctx):
+                            yield parameters_confirm_event
+
+                        parameters_confirm = ctx.session.state.get(
+                            'parameters_confirm', {}
+                        ).get('flag', False)
+
+                    # 阶段5: 如果参数已确认，生成 JSON 文件
+                    if parameters_confirm:
+                        # 如果还没有生成 JSON，parameters_agent 会生成
+                        if not ctx.session.state.get('parameters_json_path'):
+                            # 如果参数已确认但 JSON 未生成，重新运行 parameters_agent 生成 JSON
+                            async for (
+                                parameters_event
+                            ) in self.parameters_agent.run_async(ctx):
+                                yield parameters_event
+
+                        # 生成 JSON 后，流程结束
+                        json_path = ctx.session.state.get('parameters_json_path')
+                        if json_path:
+                            for json_complete_event in all_text_event(
+                                ctx,
+                                self.name,
+                                f'\n\n✅ 参数确认完成！参数 JSON 文件已生成：`{json_path}`\n\n流程结束。',
+                                ModelRole,
+                            ):
+                                yield json_complete_event
+
+                    # 停掉 execution_agent 的执行
+                    # 注释掉原来的执行逻辑
+                    # if ctx.session.state['plan']['feasibility'] in ['full', 'part']:
+                    #     async for execution_event in self.execution_agent.run_async(
+                    #         ctx
+                    #     ):
+                    #         yield execution_event
         except BaseException as err:
             async for error_event in send_error_event(err, ctx, self.name):
                 yield error_event
