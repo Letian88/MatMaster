@@ -96,5 +96,5 @@ class UserContent(BaseModel):
 
 class ToolCallInfoSchema(BaseModel):
     tool_name: str
-    tool_args: dict
-    missing_tool_args: List[str]
+    tool_args: dict = {}
+    missing_tool_args: List[str] = []

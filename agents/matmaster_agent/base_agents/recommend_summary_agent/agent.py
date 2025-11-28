@@ -226,6 +226,12 @@ class BaseAgentWithRecAndSum(
         )
 
         tool_call_info = ctx.session.state['tool_call_info']
+        # 确保 tool_args 和 missing_tool_args 存在
+        if 'tool_args' not in tool_call_info:
+            tool_call_info['tool_args'] = {}
+        if 'missing_tool_args' not in tool_call_info:
+            tool_call_info['missing_tool_args'] = []
+        function_declarations = ctx.session.state['function_declarations']
         logger.info(
             f'{ctx.session.id} tool_call_info = {tool_call_info}, '
             f'current_function_declaration = {current_function_declaration}'
