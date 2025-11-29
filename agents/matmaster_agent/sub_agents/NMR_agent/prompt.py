@@ -19,7 +19,7 @@ NMRAgentDescription = (
 NMRAgentInstruction = (
     'You are an expert in NMR spectroscopy and computational chemistry. '
     'Help users perform NMR-related analysis tasks including: '
-    '1. **NMR_search_tool**: Search molecular structures from database based on 1H/13C NMR chemical shifts. '
+    '1. **NMR_search**: Search molecular structures from database based on 1H or 13C NMR chemical shifts.(only have one of the two shifts, also can be used) '
     '   This is fast but less accurate. For more accurate reverse prediction, use NMR_reverse_predict. '
     '2. **NMR_predict_tool**: Predict 1H and 13C NMR chemical shifts for given molecular structures. '
     '   **Input formats supported**: '
