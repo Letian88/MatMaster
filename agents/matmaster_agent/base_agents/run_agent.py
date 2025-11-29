@@ -23,6 +23,7 @@ from agents.matmaster_agent.base_agents.subordinate_agent import (
 from agents.matmaster_agent.base_callbacks.private_callback import (
     default_before_model_callback,
     remove_function_call,
+    save_tool_call_info_before_remove,
 )
 from agents.matmaster_agent.constant import MATMASTER_AGENT_NAME
 from agents.matmaster_agent.job_agents.recommend_params_agent.prompt import (
@@ -61,12 +62,19 @@ class BaseAgentWithParamsRecommendation(
     def _after_init(self):
         agent_prefix = self.name.replace('_agent', '')
 
+        # 组合 callback：先保存 function_call 到 state，再移除
+        async def tool_call_info_after_model_callback(callback_context, llm_response):
+            # 先保存 function_call 到 state
+            await save_tool_call_info_before_remove(callback_context, llm_response)
+            # 再移除 function_call
+            return await remove_function_call(callback_context, llm_response)
+
         self._tool_call_info_agent = DisallowTransferSchemaAgent(
             model=self.model,
             name=f"{agent_prefix}_tool_call_info_agent",
             tools=self.tools,
             before_model_callback=default_before_model_callback,
-            after_model_callback=remove_function_call,
+            after_model_callback=tool_call_info_after_model_callback,
             output_schema=ToolCallInfoSchema,
             state_key='tool_call_info',
         )

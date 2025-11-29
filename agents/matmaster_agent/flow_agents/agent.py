@@ -13,9 +13,6 @@ from agents.matmaster_agent.base_agents.disallow_transfer_agent import (
 from agents.matmaster_agent.base_agents.schema_agent import SchemaAgent
 from agents.matmaster_agent.base_callbacks.private_callback import remove_function_call
 from agents.matmaster_agent.constant import MATMASTER_AGENT_NAME, ModelRole
-from agents.matmaster_agent.flow_agents.analysis_agent.prompt import (
-    get_analysis_instruction,
-)
 from agents.matmaster_agent.flow_agents.chat_agent.prompt import (
     ChatAgentDescription,
     ChatAgentGlobalInstruction,
@@ -160,6 +157,26 @@ class MatMasterFlowAgent(LlmAgent):
             instruction=PLAN_INFO_INSTRUCTION,
         )
 
+        # define execution_agent，parameters_agent needs it
+        execution_result_agent = DisallowTransferLlmAgent(
+            name='execution_result_agent',
+            model=MatMasterLlmConfig.gemini_2_5_pro,  # NOTE: Temporary fix until refactor
+            description='汇总计划的执行情况，并根据计划提示下一步的动作',
+            instruction=PLAN_EXECUTION_CHECK_INSTRUCTION,
+        )
+
+        self._execution_agent = MatMasterSupervisorAgent(
+            name='execution_agent',
+            model=MatMasterLlmConfig.default_litellm_model,
+            description='根据 materials_plan 返回的计划进行总结',
+            instruction='',
+            sub_agents=[
+                sub_agent(MatMasterLlmConfig)
+                for sub_agent in AGENT_CLASS_MAPPING.values()
+            ]
+            + [execution_result_agent],
+        )
+
         self._parameters_agent = ParametersAgent(
             execution_agent=self._execution_agent,
             name='parameters_agent',
@@ -178,25 +195,6 @@ class MatMasterFlowAgent(LlmAgent):
             disallow_transfer_to_peers=True,
             output_schema=ParametersConfirmSchema,
             state_key='parameters_confirm',
-        )
-
-        execution_result_agent = DisallowTransferLlmAgent(
-            name='execution_result_agent',
-            model=MatMasterLlmConfig.gemini_2_5_pro,  # NOTE: Temporary fix until refactor
-            description='汇总计划的执行情况，并根据计划提示下一步的动作',
-            instruction=PLAN_EXECUTION_CHECK_INSTRUCTION,
-        )
-
-        self._execution_agent = MatMasterSupervisorAgent(
-            name='execution_agent',
-            model=MatMasterLlmConfig.default_litellm_model,
-            description='根据 materials_plan 返回的计划进行总结',
-            instruction='',
-            sub_agents=[
-                sub_agent(MatMasterLlmConfig)
-                for sub_agent in AGENT_CLASS_MAPPING.values()
-            ]
-            + [execution_result_agent],
         )
 
         self._analysis_agent = DisallowTransferLlmAgent(

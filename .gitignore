@@ -28,3 +28,5 @@ log
 *.txt
 *log*
 function_declaration
+parameter
+agents/parameters_output/
