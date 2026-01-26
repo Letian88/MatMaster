@@ -588,7 +588,7 @@ ALL_TOOLS = {
             'Cannot do / Limits: Cannot retrieve from internet; local PDFs only.\n'
             'Cost / Notes: Low.'
         ),
-        'alternative': ['file_parse', 'extract_material_data_from_webpage'],
+        'alternative': ['file_parse', 'extract_info_from_webpage'],
         'bypass_confirmation': True,
         'self_check': False,
     },
