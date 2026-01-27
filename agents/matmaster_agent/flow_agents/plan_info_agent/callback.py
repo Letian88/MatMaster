@@ -10,6 +10,7 @@ from agents.matmaster_agent.flow_agents.constant import (
     MATMASTER_FLOW,
     UNIVERSAL_CONTEXT_FILTER_KEYWORDS,
 )
+from agents.matmaster_agent.flow_agents.expand_agent.constant import EXPAND_AGENT
 from agents.matmaster_agent.logger import PrefixFilter
 from agents.matmaster_agent.utils.context_utils import is_content_has_keywords
 
@@ -25,7 +26,7 @@ async def filter_plan_info_llm_contents(
     for content in llm_request.contents[::-1]:
         if is_content_has_keywords(
             content,
-            UNIVERSAL_CONTEXT_FILTER_KEYWORDS + [MATMASTER_FLOW],
+            UNIVERSAL_CONTEXT_FILTER_KEYWORDS + [EXPAND_AGENT] + [MATMASTER_FLOW],
         ):
             continue
         else:
