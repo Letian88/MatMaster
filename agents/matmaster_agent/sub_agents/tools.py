@@ -553,11 +553,11 @@ ALL_TOOLS = {
         'belonging_agent': COMPDART_AGENT_NAME,
         'scene': [SceneEnum.COMPOSITION_OPTIMIZATION],
         'description': (
-            'What it does: Perform compositional optimization for multi-component materials to target specific properties using genetic algorithm.\n'
-            'When to use: Search optimized compositions for target properties.\n'
-            'Prerequisites / Inputs: Target properties, optional initial compositions or structure templates, constrains, and surrogate model.\n'
+            'What it does: Optimize multi-component compositions for target properties using genetic algorithm.\n'
+            'When to use: GA or composition search/optimization for target properties (e.g. TEC, density) under composition constraints.\n'
+            'Prerequisites / Inputs: Target properties, optional initial compositions, constraints, surrogate model.\n'
             'Outputs: Optimized compositions.\n'
-            'Cannot do / Limits: Cannot build doping structures; requires surrogate model.\n'
+            'Cannot do / Limits: Requires surrogate model; cannot build doping structures.\n'
             'Cost / Notes: High due to long iterations.'
         ),
         'alternative': [],
