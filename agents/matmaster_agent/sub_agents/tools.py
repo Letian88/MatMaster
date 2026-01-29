@@ -1465,7 +1465,12 @@ ALL_TOOLS = {
     },
     'orchestrate_input': {
         'belonging_agent': LAMMPS_AGENT_NAME,
-        'scene': [SceneEnum.MOLECULAR_DYNAMICS, SceneEnum.LAMMPS, SceneEnum.ABACUS, SceneEnum.UNIVERSAL],
+        'scene': [
+            SceneEnum.MOLECULAR_DYNAMICS,
+            SceneEnum.LAMMPS,
+            SceneEnum.ABACUS,
+            SceneEnum.UNIVERSAL,
+        ],
         'description': (
             'What it does: Generate input scripts for simulation/calculation engines. '
             'Supports: LAMMPS, ABACUS, VASP, QE (Quantum ESPRESSO), Psi4, Gaussian, ORCA.\n'
