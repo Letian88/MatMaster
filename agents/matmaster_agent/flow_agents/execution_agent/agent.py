@@ -31,7 +31,7 @@ from agents.matmaster_agent.llm_config import MatMasterLlmConfig
 from agents.matmaster_agent.locales import i18n
 from agents.matmaster_agent.logger import PrefixFilter
 from agents.matmaster_agent.prompt import MatMasterCheckTransferPrompt
-from agents.matmaster_agent.state import PLAN
+from agents.matmaster_agent.state import PLAN, STEP_DESCRIPTION
 from agents.matmaster_agent.sub_agents.mapping import (
     MatMasterSubAgentsEnum,
 )
@@ -89,7 +89,7 @@ class MatMasterSupervisorAgent(DisallowTransferAndContentLimitLlmAgent):
     ) -> AsyncGenerator[Event, None]:
         update_plan = copy.deepcopy(ctx.session.state['plan'])
         current_tool_name = update_plan['steps'][index]['tool_name']
-        current_tool_description = update_plan['steps'][index]['description']
+        current_tool_description = update_plan['steps'][index][STEP_DESCRIPTION]
         update_plan['steps'][index]['status'] = PlanStepStatusEnum.PROCESS
         yield update_state_event(
             ctx,
@@ -191,7 +191,7 @@ class MatMasterSupervisorAgent(DisallowTransferAndContentLimitLlmAgent):
     ) -> AsyncGenerator[Event, None]:
         current_tool_name = ctx.session.state[PLAN]['steps'][index]['tool_name']
         current_tool_description = ctx.session.state[PLAN]['steps'][index][
-            'description'
+            STEP_DESCRIPTION
         ]
         lines = (
             f"用户原始请求: {ctx.user_content.parts[0].text}",
