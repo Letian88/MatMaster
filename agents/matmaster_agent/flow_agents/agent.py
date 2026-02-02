@@ -455,12 +455,12 @@ class MatMasterFlowAgent(LlmAgent):
                         last_full_text = parts_text.strip()
             thinking_text = last_full_text
             logger.info(
-                f'{ctx.session.id} thinking_agent result length={len(thinking_text)}, '
+                f'{ctx.session.id} reasoning_agent result length={len(thinking_text)}, '
                 f'preview={repr(thinking_text[:300]) if thinking_text else "empty"}'
             )
         except Exception as e:
             logger.warning(
-                f'{ctx.session.id} thinking_agent failed: {e}, proceed without thinking'
+                f'{ctx.session.id} reasoning_agent failed: {e}, proceed without thinking'
             )
 
         self.plan_make_agent.instruction = get_plan_make_instruction(
