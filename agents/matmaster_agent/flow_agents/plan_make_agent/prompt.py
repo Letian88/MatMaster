@@ -1,10 +1,32 @@
-def get_plan_make_instruction(available_tools_with_info: str):
+def get_plan_make_instruction(
+    available_tools_with_info: str,
+    thinking_context: str = '',
+    session_file_summary: str = '',
+) -> str:
+    session_block = ''
+    if session_file_summary:
+        session_block = f"""
+<Session File Info>
+{session_file_summary}
+"""
+    thinking_block = ''
+    if thinking_context:
+        thinking_block = f"""
+<Prior Thinking> (MUST constrain your plans by stages and rules below)
+{thinking_context}
+
+CRITICAL: Your plans MUST respect the stages and constraints above:
+- Each step in your plan belongs to a stage; only use tools that <Prior Thinking> allows for that stage.
+- Obey every cross-stage rule: e.g. if the thinking says "如果 Stage xx 选了 xxx，则 Stage yy 就必须 xxx", then any plan where stage xx uses xxx must have stage yy use the required tool(s). Do not output plans that violate these rules.
+- You may still output MULTIPLE alternative plans (different tool choices within the allowed sets, or different order of stages), but every plan must satisfy the stage-wise allowed tools and the cross-stage rules.
+"""
     return f"""
 You are an AI assistant specialized in creating structured execution plans. Analyze user intent and any provided error logs to break down requests into sequential steps.
 
 <Available Tools With Info>
 {available_tools_with_info}
-
+{session_block}
+{thinking_block}
 ### OUTPUT LANGUAGE (NEW, CRITICAL):
 All natural-language fields in the output MUST be written in {{target_language}}.
 This includes (but is not limited to): "intro", each plan's "plan_description", each step's "step_description", each step's "feasibility", and "overall".

@@ -88,6 +88,11 @@ from agents.matmaster_agent.flow_agents.step_validation_agent.prompt import (
 from agents.matmaster_agent.flow_agents.step_validation_agent.schema import (
     StepValidationSchema,
 )
+from agents.matmaster_agent.flow_agents.thinking_agent.agent import ThinkingAgent
+from agents.matmaster_agent.flow_agents.thinking_agent.constant import THINKING_AGENT
+from agents.matmaster_agent.flow_agents.thinking_agent.prompt import (
+    get_thinking_instruction,
+)
 from agents.matmaster_agent.flow_agents.utils import (
     check_plan,
     get_tools_list,
@@ -109,6 +114,7 @@ from agents.matmaster_agent.services.icl import (
     toolchain_from_examples,
 )
 from agents.matmaster_agent.services.questions import get_random_questions
+from agents.matmaster_agent.services.session_files import get_session_files
 from agents.matmaster_agent.state import (
     BIZ,
     EXPAND,
@@ -188,6 +194,13 @@ class MatMasterFlowAgent(LlmAgent):
             state_key=MULTI_PLANS,
             global_instruction=GLOBAL_INSTRUCTION,
             before_model_callback=filter_plan_make_llm_contents,
+        )
+
+        self._thinking_agent = ThinkingAgent(
+            name=THINKING_AGENT,
+            model=MatMasterLlmConfig.tool_schema_model,
+            description='在制定计划前对工具选择与顺序进行推理',
+            instruction='',
         )
 
         self._execution_agent = None
@@ -397,10 +410,65 @@ class MatMasterFlowAgent(LlmAgent):
                 for key, value in available_tools_with_info.items()
             ]
         )
+
+        # Get session files (after full tool list is available)
+        try:
+            session_files = await get_session_files(ctx.session.id)
+        except Exception as e:
+            logger.warning(
+                f'{ctx.session.id} get_session_files failed: {e}, fallback to empty'
+            )
+            session_files = []
+        session_has_file = bool(session_files) or bool(
+            ctx.session.state.get(UPLOAD_FILE, False)
+        )
+        if session_has_file and session_files:
+            session_file_summary = (
+                f'Session has uploaded file(s): yes. Count: {len(session_files)}. '
+                f'First few: {session_files[:3]}'
+            )
+        else:
+            session_file_summary = 'Session has uploaded file(s): no.'
+
+        # Thinking step before planning
+        thinking_text = ''
+        try:
+            self._thinking_agent.instruction = get_thinking_instruction(
+                available_tools_with_info_str,
+                session_file_summary,
+                UPDATE_USER_CONTENT,
+            )
+            last_full_text = ''
+            async for thinking_event in self._thinking_agent.run_async(ctx):
+                yield thinking_event
+                if (
+                    not thinking_event.partial
+                    and thinking_event.content
+                    and thinking_event.content.parts
+                ):
+                    parts_text = ''.join(
+                        p.text or ''
+                        for p in thinking_event.content.parts
+                        if getattr(p, 'text', None)
+                    )
+                    if parts_text.strip():
+                        last_full_text = parts_text.strip()
+            thinking_text = last_full_text
+            logger.info(
+                f'{ctx.session.id} thinking_agent result length={len(thinking_text)}, '
+                f'preview={repr(thinking_text[:300]) if thinking_text else "empty"}'
+            )
+        except Exception as e:
+            logger.warning(
+                f'{ctx.session.id} thinking_agent failed: {e}, proceed without thinking'
+            )
+
         self.plan_make_agent.instruction = get_plan_make_instruction(
             available_tools_with_info_str
             + UPDATE_USER_CONTENT
-            + TOOLCHAIN_EXAMPLES_PROMPT
+            + TOOLCHAIN_EXAMPLES_PROMPT,
+            thinking_context=thinking_text,
+            session_file_summary=session_file_summary,
         )
         self.plan_make_agent.output_schema = create_dynamic_multi_plans_schema(
             available_tools
