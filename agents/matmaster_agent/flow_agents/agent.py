@@ -92,6 +92,7 @@ from agents.matmaster_agent.flow_agents.thinking_agent.agent import ThinkingAgen
 from agents.matmaster_agent.flow_agents.thinking_agent.constant import THINKING_AGENT
 from agents.matmaster_agent.flow_agents.thinking_agent.prompt import (
     get_thinking_instruction,
+    get_thinking_revision_instruction,
 )
 from agents.matmaster_agent.flow_agents.utils import (
     check_plan,
@@ -430,13 +431,32 @@ class MatMasterFlowAgent(LlmAgent):
         else:
             session_file_summary = 'Session has uploaded file(s): no.'
 
-        # Thinking step before planning
+        expand_state = ctx.session.state.get('expand', {})
+        original_query = expand_state.get('origin_user_content') or (
+            ctx.user_content.parts[0].text
+            if ctx.user_content and ctx.user_content.parts
+            else ''
+        )
+        expanded_query = expand_state.get('update_user_content', '')
+
+        # Thinking: one round by default; second round only when first might need revision
         thinking_text = ''
+        _REVISION_HINTS = (
+            'optional',
+            'no tool',
+            'not found',
+            '未找到',
+            '无工具',
+            '不确定',
+            'not sure',
+            'no tool accepts',
+        )
         try:
             self._thinking_agent.instruction = get_thinking_instruction(
                 available_tools_with_info_str,
                 session_file_summary,
-                UPDATE_USER_CONTENT,
+                original_query,
+                expanded_query,
             )
             last_full_text = ''
             async for thinking_event in self._thinking_agent.run_async(ctx):
@@ -453,7 +473,38 @@ class MatMasterFlowAgent(LlmAgent):
                     )
                     if parts_text.strip():
                         last_full_text = parts_text.strip()
-            thinking_text = last_full_text
+            thinking_text = (last_full_text or '').strip()
+
+            # Only run revision round when first round suggests possible issues
+            run_revision = len(thinking_text) < 200 or any(
+                hint in thinking_text.lower() for hint in _REVISION_HINTS
+            )
+            if run_revision and thinking_text:
+                self._thinking_agent.instruction = get_thinking_revision_instruction(
+                    available_tools_with_info_str,
+                    session_file_summary,
+                    original_query,
+                    expanded_query,
+                    previous_reasoning=thinking_text,
+                )
+                last_full_text = ''
+                async for thinking_event in self._thinking_agent.run_async(ctx):
+                    yield thinking_event
+                    if (
+                        not thinking_event.partial
+                        and thinking_event.content
+                        and thinking_event.content.parts
+                    ):
+                        parts_text = ''.join(
+                            p.text or ''
+                            for p in thinking_event.content.parts
+                            if getattr(p, 'text', None)
+                        )
+                        if parts_text.strip():
+                            last_full_text = parts_text.strip()
+                round_text = (last_full_text or '').strip()
+                if round_text.upper() != 'OK' and len(round_text) >= 10:
+                    thinking_text = round_text
             logger.info(
                 f'{ctx.session.id} reasoning_agent result length={len(thinking_text)}, '
                 f'preview={repr(thinking_text[:300]) if thinking_text else "empty"}'
