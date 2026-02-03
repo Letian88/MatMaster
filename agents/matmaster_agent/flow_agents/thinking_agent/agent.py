@@ -3,6 +3,7 @@ from typing import Any, AsyncGenerator, Optional, override
 
 from google.adk.agents import InvocationContext
 from google.adk.events import Event
+from google.genai.types import Content, Part
 
 from agents.matmaster_agent.constant import MATMASTER_AGENT_NAME
 from agents.matmaster_agent.core_agents.comp_agents.dntransfer_climit_agent import (
@@ -11,7 +12,9 @@ from agents.matmaster_agent.core_agents.comp_agents.dntransfer_climit_agent impo
 from agents.matmaster_agent.flow_agents.thinking_agent.constant import (
     FIRST_ROUND_NEED_REVISION,
     FIRST_ROUND_READY,
+    MAX_THINKING_ROUNDS,
     REVISION_OK,
+    REVISION_OK_USER_MESSAGE,
 )
 from agents.matmaster_agent.flow_agents.thinking_agent.prompt import (
     get_thinking_instruction,
@@ -42,7 +45,7 @@ def _last_line(s: str) -> str:
 
 
 def _strip_first_round_marker(text: str) -> str:
-    """Remove trailing READY or NEED_REVISION line so downstream only sees reasoning."""
+    """Remove trailing READY. or Revision needed. line so downstream only sees reasoning."""
     if not text:
         return text
     lines = text.strip().splitlines()
@@ -59,14 +62,15 @@ def _strip_first_round_marker(text: str) -> str:
 
 
 def _model_wants_revision(thinking_text: str) -> bool:
-    """True iff the model ended with NEED_REVISION (model decides, no hardcoded hints)."""
+    """True iff the model ended with Revision needed. (model decides, no hardcoded hints)."""
     return _last_line(thinking_text).upper() == FIRST_ROUND_NEED_REVISION.upper()
 
 
 class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
     """Agent that produces free-form reasoning about tool selection and order before planning.
-    When _thinking_params is set, runs an internal loop: first round, then a revision round
-    only if the model ended its first reply with NEED_REVISION (model decides, no keyword lists).
+    When _thinking_params is set, runs an internal loop: at least one planning round and one
+    verification (revision) round; if planning is not READY, keep revising until READY or
+    max rounds (MAX_THINKING_ROUNDS) reached.
     """
 
     _thinking_params: Optional[dict[str, Any]] = None
@@ -95,6 +99,7 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
             return
 
         try:
+            # Round 1: planning (must run)
             self.instruction = get_thinking_instruction(
                 params['available_tools_with_info'],
                 params['session_file_summary'],
@@ -102,15 +107,44 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
                 params['expanded_query'],
             )
             last_full_text = ''
+            round1_events: list[Event] = []
             async for event in super()._run_events(ctx):
-                yield event
+                round1_events.append(event)
                 t = _collect_text_from_event(event)
                 if t:
                     last_full_text = t
             thinking_text = last_full_text.strip()
+            # Do not show "Revision needed." to user — it is an internal protocol; user only sees reasoning, then later "校验通过，采用当前规划。"
+            stripped_round1 = _strip_first_round_marker(thinking_text)
+            if stripped_round1 != thinking_text and round1_events:
+                for i in range(len(round1_events) - 1, -1, -1):
+                    ev = round1_events[i]
+                    if getattr(ev, 'content', None) and getattr(
+                        ev.content, 'parts', None
+                    ):
+                        for j, p in enumerate(ev.content.parts):
+                            if getattr(p, 'text', None) is not None:
+                                new_parts = list(ev.content.parts)
+                                new_parts[j] = Part(text=stripped_round1)
+                                round1_events[i] = Event(
+                                    author=getattr(ev, 'author', self.name),
+                                    invocation_id=getattr(
+                                        ev, 'invocation_id', ctx.invocation_id
+                                    ),
+                                    content=Content(
+                                        parts=new_parts,
+                                        role=getattr(ev.content, 'role', 'model'),
+                                    ),
+                                    partial=getattr(ev, 'partial', True),
+                                )
+                                break
+                    break
+            for ev in round1_events:
+                yield ev
+            round_index = 1
 
-            # Loop: only run revision if the model asked for it (last line NEED_REVISION)
-            if thinking_text and _model_wants_revision(thinking_text):
+            # Rounds 2..MAX: always run at least one verification; then keep revising if correction asked for it
+            while round_index < MAX_THINKING_ROUNDS:
                 previous_reasoning = _strip_first_round_marker(thinking_text)
                 self.instruction = get_thinking_revision_instruction(
                     params['available_tools_with_info'],
@@ -120,18 +154,70 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
                     previous_reasoning=previous_reasoning,
                 )
                 last_full_text = ''
+                revision_events: list[Event] = []
                 async for event in super()._run_events(ctx):
-                    yield event
+                    revision_events.append(event)
                     t = _collect_text_from_event(event)
                     if t:
-                        last_full_text = t
+                        last_full_text = (last_full_text + t) if last_full_text else t
                 round_text = last_full_text.strip()
-                if round_text.upper().strip() != REVISION_OK:
-                    thinking_text = round_text
-                else:
-                    thinking_text = previous_reasoning or thinking_text
+                round_index += 1
 
-            # Downstream gets reasoning only (no READY/NEED_REVISION marker)
+                # Verification passed = model concluded with "Verification passed." or "OK" (last line); match leniently to avoid loop when model varies punctuation/case
+                _last = _last_line(round_text).strip().upper()
+                last_line_ok = (
+                    _last == REVISION_OK.upper()
+                    or _last == 'OK'
+                    or _last.rstrip('.').endswith('VERIFICATION PASSED')
+                )
+                if last_line_ok:
+                    # Verification passed: keep current reasoning; always stream the verification round so user sees the process (must have planning + verification visible)
+                    thinking_text = previous_reasoning or thinking_text
+                    # If model only output that one line (no verification process), replace last event text with human-friendly message; otherwise stream as-is
+                    _lines = [
+                        ln for ln in round_text.strip().splitlines() if ln.strip()
+                    ]
+                    only_final_line = len(_lines) <= 1 and (
+                        _last == REVISION_OK.upper()
+                        or _last == 'OK'
+                        or _last.rstrip('.').endswith('VERIFICATION PASSED')
+                    )
+                    if only_final_line:
+                        for i in range(len(revision_events) - 1, -1, -1):
+                            ev = revision_events[i]
+                            if getattr(ev, 'content', None) and getattr(
+                                ev.content, 'parts', None
+                            ):
+                                for j, p in enumerate(ev.content.parts):
+                                    if getattr(p, 'text', None) is not None:
+                                        new_parts = list(ev.content.parts)
+                                        new_parts[j] = Part(
+                                            text=REVISION_OK_USER_MESSAGE
+                                        )
+                                        revision_events[i] = Event(
+                                            author=getattr(ev, 'author', self.name),
+                                            invocation_id=getattr(
+                                                ev, 'invocation_id', ctx.invocation_id
+                                            ),
+                                            content=Content(
+                                                parts=new_parts,
+                                                role=getattr(
+                                                    ev.content, 'role', 'model'
+                                                ),
+                                            ),
+                                            partial=getattr(ev, 'partial', True),
+                                        )
+                                        break
+                            break
+                    for ev in revision_events:
+                        yield ev
+                    break
+                # Verification produced a correction: use it and stream it; may revise again
+                thinking_text = round_text
+                for ev in revision_events:
+                    yield ev
+
+            # Downstream gets reasoning only (no READY./Revision needed. marker)
             self._last_thinking_text = _strip_first_round_marker(thinking_text)
         except Exception:
             self._last_thinking_text = None
