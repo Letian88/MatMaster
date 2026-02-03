@@ -1,13 +1,3 @@
-from typing import TypedDict
-
-
-class PlanMakePromptBlocks(TypedDict):
-    """Separated blocks for system (static) and user (dynamic) message assembly."""
-
-    system: str
-    user: str
-
-
 def get_static_plan_system_block(available_tools_with_info: str) -> str:
     """
     Immutable content: persona, tool list (heaviest component), output format and constraints.
@@ -140,30 +130,13 @@ CRITICAL: Your plans MUST respect the stages and constraints above:
     return '\n'.join(parts) if parts else ''
 
 
-def get_plan_make_instruction_blocks(
-    available_tools_with_info: str,
-    thinking_context: str = '',
-    session_file_summary: str = '',
-) -> PlanMakePromptBlocks:
-    """
-    Returns separated system (static) and user (dynamic) blocks for message assembly.
-    Use when the LLM API supports system and user roles for prefix caching.
-    """
-    return PlanMakePromptBlocks(
-        system=get_static_plan_system_block(available_tools_with_info),
-        user=get_dynamic_plan_user_block(thinking_context, session_file_summary),
-    )
-
-
 def get_plan_make_instruction(
     available_tools_with_info: str,
     thinking_context: str = '',
     session_file_summary: str = '',
 ) -> str:
     """
-    Returns a single prompt with static content first (tools + rules), then dynamic (session + thinking).
-    Maximizes prefix cache hit: tools and format rules are identical across user queries.
-    For system/user split, use get_plan_make_instruction_blocks instead.
+    Returns a single prompt: static content (tools + rules) then dynamic (session + thinking).
     """
     static = get_static_plan_system_block(available_tools_with_info)
     dynamic = get_dynamic_plan_user_block(thinking_context, session_file_summary)
