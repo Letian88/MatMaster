@@ -17,8 +17,10 @@ from agents.matmaster_agent.flow_agents.thinking_agent.constant import (
     REVISION_OK_USER_MESSAGE,
 )
 from agents.matmaster_agent.flow_agents.thinking_agent.prompt import (
-    get_thinking_instruction,
-    get_thinking_revision_instruction,
+    get_dynamic_revision_user_block,
+    get_dynamic_user_block,
+    get_static_revision_system_block,
+    get_static_system_block,
 )
 from agents.matmaster_agent.logger import PrefixFilter
 
@@ -67,10 +69,10 @@ def _model_wants_revision(thinking_text: str) -> bool:
 
 
 class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
-    """Agent that produces free-form reasoning about tool selection and order before planning.
-    When _thinking_params is set, runs an internal loop: at least one planning round and one
-    verification (revision) round; if planning is not READY, keep revising until READY or
-    max rounds (MAX_THINKING_ROUNDS) reached.
+    """Agent that produces structured CoT reasoning (analysis → drafting → simulation → plan).
+    When _thinking_params is set, runs an internal loop: planning round then verification;
+    if not READY, keep revising until READY or max rounds (MAX_THINKING_ROUNDS).
+    Uses static (system) vs dynamic (user) prompt separation for prompt caching.
     """
 
     _thinking_params: Optional[dict[str, Any]] = None
@@ -99,9 +101,12 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
             return
 
         try:
-            # Round 1: planning (must run)
-            self.instruction = get_thinking_instruction(
-                params['available_tools_with_info'],
+            # Reuse tools string for cache key stability (generated once by flow, passed here)
+            tools_str: str = params['available_tools_with_info']
+
+            # Round 1: planning — set system (static) once, user (dynamic) this turn
+            self.global_instruction = get_static_system_block(tools_str)
+            self.instruction = get_dynamic_user_block(
                 params['session_file_summary'],
                 params['original_query'],
                 params['expanded_query'],
@@ -143,11 +148,11 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
                 yield ev
             round_index = 1
 
-            # Rounds 2..MAX: always run at least one verification; then keep revising if correction asked for it
+            # Rounds 2..MAX: set revision system (static) once, user (dynamic) every turn
+            self.global_instruction = get_static_revision_system_block(tools_str)
             while round_index < MAX_THINKING_ROUNDS:
                 previous_reasoning = _strip_first_round_marker(thinking_text)
-                self.instruction = get_thinking_revision_instruction(
-                    params['available_tools_with_info'],
+                self.instruction = get_dynamic_revision_user_block(
                     params['session_file_summary'],
                     params['original_query'],
                     params['expanded_query'],
@@ -212,7 +217,18 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
                     for ev in revision_events:
                         yield ev
                     break
-                # Verification produced a correction: use it and stream it; may revise again
+                # Correction output: continue only if model explicitly requests another verification round
+                _wants_another = (
+                    _last_line(round_text).strip().upper()
+                    == FIRST_ROUND_NEED_REVISION.upper()
+                )
+                if not _wants_another:
+                    # No explicit request for verification → stop; use corrected plan as final
+                    thinking_text = _strip_first_round_marker(round_text)
+                    for ev in revision_events:
+                        yield ev
+                    break
+                # Explicit "Revision needed." → use correction and run another verification round
                 thinking_text = round_text
                 for ev in revision_events:
                     yield ev
