@@ -155,19 +155,6 @@ def get_plan_make_instruction_blocks(
     )
 
 
-def get_static_plan_make_block(available_tools_with_info: str) -> str:
-    """Alias for get_static_plan_system_block for backward compatibility."""
-    return get_static_plan_system_block(available_tools_with_info)
-
-
-def get_dynamic_plan_make_block(
-    thinking_context: str = '',
-    session_file_summary: str = '',
-) -> str:
-    """Alias for get_dynamic_plan_user_block for backward compatibility."""
-    return get_dynamic_plan_user_block(thinking_context, session_file_summary)
-
-
 def get_plan_make_instruction(
     available_tools_with_info: str,
     thinking_context: str = '',
