@@ -195,7 +195,7 @@ class MatMasterFlowAgent(LlmAgent):
 
         self._thinking_agent = ThinkingAgent(
             name=THINKING_AGENT,
-            model=MatMasterLlmConfig.tool_schema_model,
+            model=MatMasterLlmConfig.default_litellm_model,
             description='在制定计划前对工具选择与顺序进行推理',
             instruction='',
         )
