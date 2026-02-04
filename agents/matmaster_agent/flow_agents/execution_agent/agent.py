@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 from typing import AsyncGenerator, override
 
@@ -177,12 +178,16 @@ class MatMasterSupervisorAgent(DisallowTransferAndContentLimitLlmAgent):
             None,
             ModelRole,
             {
-                'title': step_title,
-                'status': 'start',
-                'font_color': '#0E6DE8',
-                'bg_color': '#EBF2FB',
-                'border_color': '#B7D3F7',
-                'execution_type_label': execution_type_label,
+                'matmaster_flow_args': json.dumps(
+                    {
+                        'title': step_title,
+                        'status': 'start',
+                        'font_color': '#0E6DE8',
+                        'bg_color': '#EBF2FB',
+                        'border_color': '#B7D3F7',
+                        'execution_type_label': execution_type_label,
+                    }
+                )
             },
         ):
             yield matmaster_flow_event
