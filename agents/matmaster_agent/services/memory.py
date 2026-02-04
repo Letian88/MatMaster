@@ -11,12 +11,13 @@ from typing import Any, Optional
 
 import requests
 
-from agents.matmaster_agent.constant import MEMORY_API_PREFIX, MEMORY_SERVICE_URL
+from agents.matmaster_agent.constant import MEMORY_SERVICE_URL
 
 logger = logging.getLogger(__name__)
 
 _CONNECT_TIMEOUT = 3
 _READ_TIMEOUT = 10
+_MEMORY_PATH = '/api/v1/memory'
 
 
 def _base(base_url: Optional[str] = None) -> str:
@@ -24,12 +25,6 @@ def _base(base_url: Optional[str] = None) -> str:
     if not url.startswith('http'):
         url = f'http://{url}'
     return url.rstrip('/')
-
-
-def _path(suffix: str) -> str:
-    prefix = (MEMORY_API_PREFIX or '').rstrip('/')
-    p = suffix.lstrip('/')
-    return f'{prefix}/{p}' if prefix else f'/{p}'
 
 
 def memory_write(
@@ -46,7 +41,7 @@ def memory_write(
     }
     try:
         r = requests.post(
-            f'{_base(base_url)}{_path("write")}',
+            f'{_base(base_url)}{_MEMORY_PATH}/write',
             json=payload,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
@@ -69,7 +64,7 @@ def memory_retrieve(
     }
     try:
         r = requests.post(
-            f'{_base(base_url)}{_path("retrieve")}',
+            f'{_base(base_url)}{_MEMORY_PATH}/retrieve',
             json=payload,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
@@ -104,7 +99,7 @@ def memory_list(
         payload['limit'] = limit
     try:
         r = requests.post(
-            f'{_base(base_url)}{_path("list")}',
+            f'{_base(base_url)}{_MEMORY_PATH}/list',
             json=payload,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )

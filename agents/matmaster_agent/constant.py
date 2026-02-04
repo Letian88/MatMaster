@@ -50,8 +50,6 @@ BOHRIUM_COM = f'https://www{URL_PART}.bohrium.com'
 BOHRIUM_HOST = f'https://bohrium{URL_PART}.dp.tech'
 ICL_SERVICE_URL = '101.126.90.82:8001'
 MEMORY_SERVICE_URL = '101.126.90.82:8002'
-# Path prefix for memory API. Server: POST /api/v1/memory/write, /retrieve, /list
-MEMORY_API_PREFIX = '/api/v1/memory'
 MATMASTER_TOOLS_SERVER = f'https://matmaster-tools-server{URL_PART}.bohrium.com'
 if CURRENT_ENV == 'test':
     DFLOW_HOST = 'https://lbg-workflow-mlops.test.dp.tech'
