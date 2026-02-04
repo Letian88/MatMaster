@@ -1,8 +1,8 @@
 """
-Mock-write data to MatMaster session memory via the memory HTTP service.
+Mock-write data to MatMaster session memory via the memory FastAPI service.
 
-Requires: memory service running (uv run uvicorn memory_service.main:app --host 0.0.0.0 --port 8002)
-Uses MEMORY_SERVICE_URL (default 127.0.0.1:8002).
+Uses agents.matmaster_agent.services.memory (same HTTP client as agent).
+Default URL: MEMORY_SERVICE_URL from constant; override with --url or env MEMORY_SERVICE_URL.
 
 Usage (from project root):
     uv run python scripts/save_memory_data.py --session mock-session-1 --content "user prefers DPA for relaxation"
@@ -10,7 +10,6 @@ Usage (from project root):
 """
 
 import argparse
-import os
 import sys
 import time
 from pathlib import Path
@@ -21,20 +20,20 @@ _PROJECT_ROOT = _SCRIPT_DIR.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-import requests  # noqa: E402
+from agents.matmaster_agent.constant import MEMORY_SERVICE_URL  # noqa: E402
+from agents.matmaster_agent.services.memory import memory_write  # noqa: E402
 
-DEFAULT_MEMORY_SERVICE_URL = os.environ.get('MEMORY_SERVICE_URL', '127.0.0.1:8002')
 MOCK_DOC_TEMPLATE = 'mock insight #{n}: session_id={sid} (for testing read_memory_data)'
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description='Mock-write MatMaster session memory via the memory HTTP service'
+        description='Mock-write MatMaster session memory via the memory FastAPI service'
     )
     parser.add_argument(
         '--url',
-        default=DEFAULT_MEMORY_SERVICE_URL,
-        help=f'Memory service base URL host:port (default: {DEFAULT_MEMORY_SERVICE_URL})',
+        default=MEMORY_SERVICE_URL,
+        help=f'Memory service host:port (default: {MEMORY_SERVICE_URL})',
     )
     parser.add_argument(
         '--session',
@@ -54,9 +53,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    base_url = args.url if '://' in args.url else f'http://{args.url}'
-    write_endpoint = f'{base_url.rstrip("/")}/api/v1/memory/write'
-
     if args.content is not None:
         texts = [args.content]
     else:
@@ -67,27 +63,13 @@ def main() -> None:
         ]
 
     t0 = time.perf_counter()
-    for i, text in enumerate(texts):
-        try:
-            resp = requests.post(
-                write_endpoint,
-                json={
-                    'session_id': args.session,
-                    'text': text,
-                    'metadata': {},
-                },
-                timeout=10,
-            )
-            resp.raise_for_status()
-        except requests.RequestException as e:
-            print(f'Write failed (item {i + 1}): {e}')
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    print(e.response.text)
-                except Exception:
-                    pass
-            sys.exit(1)
-
+    for text in texts:
+        memory_write(
+            session_id=args.session,
+            text=text,
+            metadata={},
+            base_url=args.url,
+        )
     elapsed = time.perf_counter() - t0
     print(f'[timer] save: {elapsed:.3f} s')
     print(f'Wrote {len(texts)} document(s) to session_id={args.session!r}')
