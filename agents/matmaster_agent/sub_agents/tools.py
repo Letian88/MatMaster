@@ -1475,7 +1475,7 @@ ALL_TOOLS = {
             'What it does: Generate input scripts for simulation/calculation engines. '
             'Supports: LAMMPS, ABACUS, VASP, QE (Quantum ESPRESSO), Psi4, Gaussian, ORCA.\n'
             'When to use: Create input from description.\n'
-            'Prerequisites / Inputs: structural information; engine_type (one of: lammps, abacus, vasp, qe, psi4, gaussian, orca), natural language task.\n'
+            'Prerequisites / Inputs: engine_type (one of: lammps, abacus, vasp, qe, psi4, gaussian, orca), natural language task.\n'
             'Outputs: Input script content.\n'
             'Cannot do / Limits: Script generation only.\n'
             'Cost / Notes: Low.'
