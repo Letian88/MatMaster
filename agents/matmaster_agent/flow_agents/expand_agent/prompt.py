@@ -22,7 +22,9 @@ def build_expand_context(
     if short_term_memory_block:
         parts.append(MEMORY_SECTION_HEADER + short_term_memory_block.strip() + '\n\n')
     if session_file_summary:
-        parts.append(SESSION_FILES_SECTION_HEADER + session_file_summary.strip() + '\n\n')
+        parts.append(
+            SESSION_FILES_SECTION_HEADER + session_file_summary.strip() + '\n\n'
+        )
     return ''.join(parts)
 
 
