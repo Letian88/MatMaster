@@ -484,6 +484,7 @@ class MatMasterFlowAgent(LlmAgent):
                 session_file_summary,
                 original_query,
                 expanded_query,
+                short_term_memory=short_term_memory_block,
             )
             last_full_text = ''
             async for thinking_event in self._thinking_agent.run_async(ctx):
@@ -516,7 +517,7 @@ class MatMasterFlowAgent(LlmAgent):
             available_tools_with_info_str
             + UPDATE_USER_CONTENT
             + TOOLCHAIN_EXAMPLES_PROMPT,
-            short_term_memory=short_term_memory_block,,
+            short_term_memory=short_term_memory_block,
             thinking_context=thinking_text,
             session_file_summary=session_file_summary,
         )

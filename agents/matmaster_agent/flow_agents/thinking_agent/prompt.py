@@ -30,6 +30,7 @@ You must follow the Structured Reasoning Protocol below and output your reasonin
         Deconstruct user intent into Input Data (Source) and Desired Output (Target).
         Identify key entities (SMILES, chemical formulas, files).
         Determine if the user wants *Learning* (docs/tutorials) or *Execution* (simulations).
+        If <Session Memory> is provided: use it. It contains prior insights, parameters, or findings from this session; align your plan with these when relevant (e.g. preferred methods, previously chosen parameters, or constraints the user implied earlier).
     </phase_1_analysis>
 
     <phase_2_drafting>
@@ -107,7 +108,16 @@ def get_dynamic_user_block(
         '</Session File Info>',
     ]
     if short_term_memory:
-        parts.extend(['', short_term_memory, ''])
+        parts.extend(
+            [
+                '',
+                '<Session Memory>',
+                'Relevant prior context from this session (use when planning):',
+                short_term_memory.strip(),
+                '</Session Memory>',
+                '',
+            ]
+        )
     parts.extend(
         [
             '--- Original user message ---',
@@ -207,7 +217,16 @@ def get_dynamic_revision_user_block(
         '</Session File Info>',
     ]
     if short_term_memory:
-        parts.extend(['', short_term_memory, ''])
+        parts.extend(
+            [
+                '',
+                '<Session Memory>',
+                'Relevant prior context from this session:',
+                short_term_memory.strip(),
+                '</Session Memory>',
+                '',
+            ]
+        )
     parts.extend(
         [
             '--- Inputs ---',
