@@ -104,18 +104,20 @@ from agents.matmaster_agent.memory.prompt import (
     LONG_CONTEXT_THRESHOLD,
     get_memory_writer_instruction,
 )
-from agents.matmaster_agent.services.memory import format_short_term_memory
 from agents.matmaster_agent.prompt import (
     GLOBAL_INSTRUCTION,
     HUMAN_FRIENDLY_FORMAT_REQUIREMENT,
 )
-from agents.matmaster_agent.services.memory import memory_write
 from agents.matmaster_agent.services.icl import (
     expand_input_examples,
     scene_tags_from_examples,
     select_examples,
     select_update_examples,
     toolchain_from_examples,
+)
+from agents.matmaster_agent.services.memory import (
+    format_short_term_memory,
+    memory_write,
 )
 from agents.matmaster_agent.services.questions import get_random_questions
 from agents.matmaster_agent.services.session_files import get_session_files

@@ -79,7 +79,11 @@ def memory_retrieve(
         if not isinstance(docs, list):
             return []
         return [
-            (d.get('document') or d.get('text') or '') if isinstance(d, dict) else str(d)
+            (
+                (d.get('document') or d.get('text') or '')
+                if isinstance(d, dict)
+                else str(d)
+            )
             for d in docs
         ]
     except Exception as e:
@@ -110,8 +114,15 @@ def memory_list(
         if not isinstance(raw, list):
             return []
         return [
-            {'id': d.get('id'), 'document': d.get('document', d.get('text', '')), 'metadata': d.get('metadata', {})}
-            if isinstance(d, dict) else d
+            (
+                {
+                    'id': d.get('id'),
+                    'document': d.get('document', d.get('text', '')),
+                    'metadata': d.get('metadata', {}),
+                }
+                if isinstance(d, dict)
+                else d
+            )
             for d in raw
         ]
     except Exception as e:

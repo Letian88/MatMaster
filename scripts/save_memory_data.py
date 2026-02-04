@@ -57,10 +57,7 @@ def main() -> None:
         texts = [args.content]
     else:
         n = max(1, args.count)
-        texts = [
-            MOCK_DOC_TEMPLATE.format(n=i + 1, sid=args.session)
-            for i in range(n)
-        ]
+        texts = [MOCK_DOC_TEMPLATE.format(n=i + 1, sid=args.session) for i in range(n)]
 
     t0 = time.perf_counter()
     for text in texts:
