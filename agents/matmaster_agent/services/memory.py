@@ -11,7 +11,7 @@ from typing import Any, Optional
 
 import requests
 
-from agents.matmaster_agent.constant import MEMORY_SERVICE_URL
+from agents.matmaster_agent.constant import MEMORY_API_PREFIX, MEMORY_SERVICE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,12 @@ def _base(base_url: Optional[str] = None) -> str:
     if not url.startswith('http'):
         url = f'http://{url}'
     return url.rstrip('/')
+
+
+def _path(suffix: str) -> str:
+    prefix = (MEMORY_API_PREFIX or '').rstrip('/')
+    p = suffix.lstrip('/')
+    return f'{prefix}/{p}' if prefix else f'/{p}'
 
 
 def memory_write(
@@ -40,7 +46,7 @@ def memory_write(
     }
     try:
         r = requests.post(
-            f'{_base(base_url)}/write',
+            f'{_base(base_url)}{_path("write")}',
             json=payload,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
@@ -58,21 +64,24 @@ def memory_retrieve(
     """Retrieve relevant memory texts for the session and query. Returns list of text snippets."""
     payload = {
         'session_id': session_id,
-        'query': query,
-        'limit': limit,
+        'query_text': query,
+        'n_results': limit,
     }
     try:
         r = requests.post(
-            f'{_base(base_url)}/retrieve',
+            f'{_base(base_url)}{_path("retrieve")}',
             json=payload,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
         r.raise_for_status()
         data = r.json()
-        docs = data.get('documents') or data.get('results') or []
-        if isinstance(docs, list):
-            return [d.get('text', d) if isinstance(d, dict) else str(d) for d in docs]
-        return []
+        docs = data.get('data') or []
+        if not isinstance(docs, list):
+            return []
+        return [
+            (d.get('document') or d.get('text') or '') if isinstance(d, dict) else str(d)
+            for d in docs
+        ]
     except Exception as e:
         logger.debug('memory_retrieve failed: %s', e)
         return []
@@ -83,21 +92,28 @@ def memory_list(
     limit: Optional[int] = None,
     base_url: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """List stored documents, optionally filtered by session_id and limit."""
-    params: dict[str, Any] = {}
+    """List stored documents (POST body). Server returns {data: [{id, document, metadata}, ...]}."""
+    payload: dict[str, Any] = {}
     if session_id is not None:
-        params['session_id'] = session_id
+        payload['session_id'] = session_id
     if limit is not None:
-        params['limit'] = limit
+        payload['limit'] = limit
     try:
-        r = requests.get(
-            f'{_base(base_url)}/list',
-            params=params or None,
+        r = requests.post(
+            f'{_base(base_url)}{_path("list")}',
+            json=payload,
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
         )
         r.raise_for_status()
         data = r.json()
-        return data.get('documents') or data.get('data') or data if isinstance(data, list) else []
+        raw = data.get('data')
+        if not isinstance(raw, list):
+            return []
+        return [
+            {'id': d.get('id'), 'document': d.get('document', d.get('text', '')), 'metadata': d.get('metadata', {})}
+            if isinstance(d, dict) else d
+            for d in raw
+        ]
     except Exception as e:
         logger.warning('memory_list failed: %s', e)
         return []
