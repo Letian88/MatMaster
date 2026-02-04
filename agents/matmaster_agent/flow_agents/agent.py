@@ -48,7 +48,10 @@ from agents.matmaster_agent.flow_agents.execution_agent.agent import (
 )
 from agents.matmaster_agent.flow_agents.expand_agent.agent import ExpandAgent
 from agents.matmaster_agent.flow_agents.expand_agent.constant import EXPAND_AGENT
-from agents.matmaster_agent.flow_agents.expand_agent.prompt import EXPAND_INSTRUCTION
+from agents.matmaster_agent.flow_agents.expand_agent.prompt import (
+    EXPAND_INSTRUCTION,
+    build_expand_context,
+)
 from agents.matmaster_agent.flow_agents.expand_agent.schema import ExpandSchema
 from agents.matmaster_agent.flow_agents.handle_upload_agent.agent import (
     HandleUploadAgent,
@@ -99,6 +102,11 @@ from agents.matmaster_agent.flow_agents.utils import (
 from agents.matmaster_agent.llm_config import MatMasterLlmConfig
 from agents.matmaster_agent.locales import i18n
 from agents.matmaster_agent.logger import PrefixFilter
+from agents.matmaster_agent.memory.agent import MemoryWriterAgent
+from agents.matmaster_agent.memory.prompt import (
+    LONG_CONTEXT_THRESHOLD,
+    get_memory_writer_instruction,
+)
 from agents.matmaster_agent.prompt import (
     GLOBAL_INSTRUCTION,
     HUMAN_FRIENDLY_FORMAT_REQUIREMENT,
@@ -109,6 +117,10 @@ from agents.matmaster_agent.services.icl import (
     select_examples,
     select_update_examples,
     toolchain_from_examples,
+)
+from agents.matmaster_agent.services.memory import (
+    format_short_term_memory,
+    memory_write,
 )
 from agents.matmaster_agent.services.questions import get_random_questions
 from agents.matmaster_agent.services.session_files import get_session_files
@@ -193,6 +205,8 @@ class MatMasterFlowAgent(LlmAgent):
             before_model_callback=filter_plan_make_llm_contents,
         )
 
+        self._memory_writer_agent = MemoryWriterAgent(MatMasterLlmConfig)
+
         self._thinking_agent = ThinkingAgent(
             name=THINKING_AGENT,
             model=MatMasterLlmConfig.default_litellm_model,
@@ -263,6 +277,11 @@ class MatMasterFlowAgent(LlmAgent):
 
     @computed_field
     @property
+    def memory_writer_agent(self) -> LlmAgent:
+        return self._memory_writer_agent
+
+    @computed_field
+    @property
     def execution_agent(self) -> LlmAgent:
         return self._execution_agent
 
@@ -326,11 +345,15 @@ class MatMasterFlowAgent(LlmAgent):
         return execution_agent
 
     async def _run_expand_agent(
-        self, ctx: InvocationContext
+        self,
+        ctx: InvocationContext,
+        short_term_memory_block: str = '',
+        session_file_summary: str = '',
     ) -> AsyncGenerator[Event, None]:
         # 1. 检索 ICL 示例
+        raw_user_text = ctx.user_content.parts[0].text if ctx.user_content.parts else ''
         icl_examples = select_examples(
-            ctx.user_content.parts[0].text,
+            raw_user_text,
             ctx.session.id,
             CURRENT_ENV,
             logger,
@@ -338,8 +361,9 @@ class MatMasterFlowAgent(LlmAgent):
         EXPAND_INPUT_EXAMPLES_PROMPT = expand_input_examples(icl_examples)
         logger.info(f'{ctx.session.id} {EXPAND_INPUT_EXAMPLES_PROMPT}')
         # 2. 动态构造 instruction
+        context = build_expand_context(short_term_memory_block, session_file_summary)
         self.expand_agent.instruction = (
-            EXPAND_INSTRUCTION + EXPAND_INPUT_EXAMPLES_PROMPT
+            context + EXPAND_INSTRUCTION + EXPAND_INPUT_EXAMPLES_PROMPT
         )
         # 3. 运行 Agent
         async for expand_event in self.expand_agent.run_async(ctx):
@@ -407,6 +431,17 @@ class MatMasterFlowAgent(LlmAgent):
                 for key, value in available_tools_with_info.items()
             ]
         )
+        query_for_memory = ctx.session.state.get('expand', {}).get(
+            'update_user_content', ''
+        ) or (
+            ctx.user_content.parts[0].text
+            if ctx.user_content and ctx.user_content.parts
+            else ''
+        )
+        short_term_memory_block = await format_short_term_memory(
+            query_text=query_for_memory,
+            session_id=ctx.session.id,
+        )
 
         # Get session files (after full tool list is available)
         try:
@@ -443,6 +478,7 @@ class MatMasterFlowAgent(LlmAgent):
                 session_file_summary,
                 original_query,
                 expanded_query,
+                short_term_memory=short_term_memory_block,
             )
             last_full_text = ''
             async for thinking_event in self._thinking_agent.run_async(ctx):
@@ -475,6 +511,7 @@ class MatMasterFlowAgent(LlmAgent):
             available_tools_with_info_str
             + UPDATE_USER_CONTENT
             + TOOLCHAIN_EXAMPLES_PROMPT,
+            short_term_memory=short_term_memory_block,
             thinking_context=thinking_text,
             session_file_summary=session_file_summary,
         )
@@ -483,6 +520,46 @@ class MatMasterFlowAgent(LlmAgent):
         )
         async for plan_event in self.plan_make_agent.run_async(ctx):
             yield plan_event
+
+        # 记忆写入：用 memory_writer_agent 从当前请求和计划提炼 insights，写入 kernel（不向用户展示）
+        plan_info = ctx.session.state.get(MULTI_PLANS) or {}
+        intro = plan_info.get('intro', '')
+        plans = plan_info.get('plans', [])
+        plan_intro = intro
+        if plans:
+            parts = [intro]
+            for i, plan in enumerate(plans):
+                desc = plan.get('plan_description', '')
+                steps_brief = '; '.join(
+                    s.get('step_description', '')[:60]
+                    for s in plan.get('steps', [])[:5]
+                )
+                parts.append(f"方案{i + 1}摘要: {desc}\n步骤: {steps_brief}")
+            plan_intro = '\n\n'.join(parts)
+        is_long_context = len(UPDATE_USER_CONTENT) >= LONG_CONTEXT_THRESHOLD
+        self.memory_writer_agent.instruction = get_memory_writer_instruction(
+            UPDATE_USER_CONTENT, plan_intro, is_long_context=is_long_context
+        )
+        async for _ in self.memory_writer_agent.run_async(ctx):
+            pass
+        output = ctx.session.state.get('memory_writer_output') or {}
+        insights = output.get('insights', []) if isinstance(output, dict) else []
+        if insights:
+            session_id = ctx.session.id
+            written = 0
+            for text in insights:
+                if isinstance(text, str) and text.strip():
+                    await memory_write(
+                        session_id=session_id, text=text.strip(), metadata={}
+                    )
+                    written += 1
+            logger.info(
+                '%s memory_writer wrote %d insight(s) to memory',
+                ctx.session.id,
+                written,
+            )
+        else:
+            logger.debug('%s memory_writer output 0 insights', ctx.session.id)
 
         # 总结计划
         yield update_state_event(
@@ -659,8 +736,22 @@ class MatMasterFlowAgent(LlmAgent):
                 self._analysis_agent.instruction = get_analysis_instruction(
                     ctx.session.state['plan']
                 )
+                analysis_text = ''
                 async for analysis_event in self.analysis_agent.run_async(ctx):
+                    if (cur := is_text(analysis_event)) and not analysis_event.partial:
+                        analysis_text += cur
                     yield analysis_event
+                if analysis_text.strip():
+                    await memory_write(
+                        session_id=ctx.session.id,
+                        text=f"Plan execution summary: {analysis_text.strip()}",
+                        metadata={'source': 'execution_summary'},
+                    )
+                    logger.info(
+                        '%s wrote execution summary to memory (%d chars)',
+                        ctx.session.id,
+                        len(analysis_text),
+                    )
                 self._report_agent.instruction = get_report_instruction(
                     ctx.session.state.get('plan', {})
                 )
@@ -670,6 +761,19 @@ class MatMasterFlowAgent(LlmAgent):
                 async for report_event in self.report_agent.run_async(ctx):
                     if (cur_text := is_text(report_event)) and not report_event.partial:
                         report_markdown += cur_text
+
+                if report_markdown.strip():
+                    excerpt = report_markdown.strip()[:5000]
+                    await memory_write(
+                        session_id=ctx.session.id,
+                        text=f"Plan execution report (excerpt): {excerpt}",
+                        metadata={'source': 'execution_report'},
+                    )
+                    logger.info(
+                        '%s wrote report excerpt to memory (%d chars)',
+                        ctx.session.id,
+                        len(excerpt),
+                    )
 
                 # matmaster_report_md.md
                 upload_result = await upload_report_md_to_oss(
@@ -737,8 +841,19 @@ class MatMasterFlowAgent(LlmAgent):
     async def _run_research_flow(
         self, ctx: InvocationContext
     ) -> AsyncGenerator[Event, None]:
-        # 扩写用户问题
-        async for _expand_event in self._run_expand_agent(ctx):
+        # 先取短期记忆和会话已有文件，再扩写，避免第二步仍从头 expand（如“第一步的Fe，扩胞到20A”只做扩胞）
+        raw_user_text = ctx.user_content.parts[0].text if ctx.user_content.parts else ''
+        short_term_memory_block = await format_short_term_memory(
+            raw_user_text, ctx.session.id
+        )
+        session_files = await get_session_files(ctx.session.id)
+        session_file_summary = '\n'.join(session_files) if session_files else ''
+        # 扩写用户问题（带记忆 + 会话文件，延续上一步时只 expand 新步骤）
+        async for _expand_event in self._run_expand_agent(
+            ctx,
+            short_term_memory_block=short_term_memory_block,
+            session_file_summary=session_file_summary,
+        ):
             yield _expand_event
 
         # 构造 UPDATE_USER_CONTENT, SCENE_EXAMPLES_PROMPT, TOOLCHAIN_EXAMPLES_PROMPT

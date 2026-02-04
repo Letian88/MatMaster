@@ -30,6 +30,7 @@ You must follow the Structured Reasoning Protocol below and output your reasonin
         Deconstruct user intent into Input Data (Source) and Desired Output (Target).
         Identify key entities (SMILES, chemical formulas, files).
         Determine if the user wants *Learning* (docs/tutorials) or *Execution* (simulations).
+        If <Session Memory> is provided: use it. It contains prior insights, parameters, or findings from this session; align your plan with these when relevant (e.g. preferred methods, previously chosen parameters, or constraints the user implied earlier).
     </phase_1_analysis>
 
     <phase_2_drafting>
@@ -95,21 +96,38 @@ def get_dynamic_user_block(
     session_file_summary: str,
     original_query: str,
     expanded_query: str,
+    short_term_memory: str = '',
 ) -> str:
     """
     Mutable content: session state and user-specific query. Changes every turn.
     """
-    return f"""### DYNAMIC CONTEXT (User Data — not cacheable from here)
-<Session File Info>
-{session_file_summary}
-</Session File Info>
-
---- Original user message ---
-{original_query}
-
---- Task from expansion step ---
-{expanded_query}
-"""
+    parts = [
+        '### DYNAMIC CONTEXT (User Data — not cacheable from here)',
+        '<Session File Info>',
+        session_file_summary,
+        '</Session File Info>',
+    ]
+    if short_term_memory:
+        parts.extend(
+            [
+                '',
+                '<Session Memory>',
+                'Relevant prior context from this session (use when planning):',
+                short_term_memory.strip(),
+                '</Session Memory>',
+                '',
+            ]
+        )
+    parts.extend(
+        [
+            '--- Original user message ---',
+            original_query,
+            '',
+            '--- Task from expansion step ---',
+            expanded_query,
+        ]
+    )
+    return '\n'.join(parts)
 
 
 def get_thinking_instruction(
@@ -117,6 +135,7 @@ def get_thinking_instruction(
     session_file_summary: str,
     original_query: str,
     expanded_query: str,
+    short_term_memory: str = '',
 ) -> str:
     """
     Returns a single prompt with static content first (max cache hit).
@@ -124,7 +143,7 @@ def get_thinking_instruction(
     """
     static = get_static_system_block(available_tools_with_info)
     dynamic = get_dynamic_user_block(
-        session_file_summary, original_query, expanded_query
+        session_file_summary, original_query, expanded_query, short_term_memory
     )
     return static + '\n\n' + dynamic
 
@@ -134,6 +153,7 @@ def get_thinking_instruction_blocks(
     session_file_summary: str,
     original_query: str,
     expanded_query: str,
+    short_term_memory: str = '',
 ) -> ThinkingPromptBlocks:
     """
     Returns separated system (static) and user (dynamic) blocks for message assembly.
@@ -142,7 +162,7 @@ def get_thinking_instruction_blocks(
     return ThinkingPromptBlocks(
         system=get_static_system_block(available_tools_with_info),
         user=get_dynamic_user_block(
-            session_file_summary, original_query, expanded_query
+            session_file_summary, original_query, expanded_query, short_term_memory
         ),
     )
 
@@ -187,20 +207,37 @@ def get_dynamic_revision_user_block(
     original_query: str,
     expanded_query: str,
     previous_reasoning: str,
+    short_term_memory: str = '',
 ) -> str:
     """Mutable content for the revision round."""
-    return f"""### DYNAMIC CONTEXT
-<Session File Info>
-{session_file_summary}
-</Session File Info>
-
---- Inputs ---
-User Query: {original_query}
-Expanded Task: {expanded_query}
-
---- Previous Reasoning to Validate ---
-{previous_reasoning}
-"""
+    parts = [
+        '### DYNAMIC CONTEXT',
+        '<Session File Info>',
+        session_file_summary,
+        '</Session File Info>',
+    ]
+    if short_term_memory:
+        parts.extend(
+            [
+                '',
+                '<Session Memory>',
+                'Relevant prior context from this session:',
+                short_term_memory.strip(),
+                '</Session Memory>',
+                '',
+            ]
+        )
+    parts.extend(
+        [
+            '--- Inputs ---',
+            f'User Query: {original_query}',
+            f'Expanded Task: {expanded_query}',
+            '',
+            '--- Previous Reasoning to Validate ---',
+            previous_reasoning,
+        ]
+    )
+    return '\n'.join(parts)
 
 
 def get_thinking_revision_instruction(
@@ -209,6 +246,7 @@ def get_thinking_revision_instruction(
     original_query: str,
     expanded_query: str,
     previous_reasoning: str,
+    short_term_memory: str = '',
 ) -> str:
     """
     Returns a single prompt with static content first.
@@ -216,7 +254,11 @@ def get_thinking_revision_instruction(
     """
     static = get_static_revision_system_block(available_tools_with_info)
     dynamic = get_dynamic_revision_user_block(
-        session_file_summary, original_query, expanded_query, previous_reasoning
+        session_file_summary,
+        original_query,
+        expanded_query,
+        previous_reasoning,
+        short_term_memory,
     )
     return static + '\n\n' + dynamic
 
@@ -227,11 +269,16 @@ def get_thinking_revision_instruction_blocks(
     original_query: str,
     expanded_query: str,
     previous_reasoning: str,
+    short_term_memory: str = '',
 ) -> ThinkingPromptBlocks:
     """Returns separated system and user blocks for the revision/validation round."""
     return ThinkingPromptBlocks(
         system=get_static_revision_system_block(available_tools_with_info),
         user=get_dynamic_revision_user_block(
-            session_file_summary, original_query, expanded_query, previous_reasoning
+            session_file_summary,
+            original_query,
+            expanded_query,
+            previous_reasoning,
+            short_term_memory,
         ),
     )

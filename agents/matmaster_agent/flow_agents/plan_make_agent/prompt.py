@@ -103,9 +103,10 @@ Before returning the final JSON, verify:
 def get_dynamic_plan_user_block(
     thinking_context: str = '',
     session_file_summary: str = '',
+    short_term_memory: str = '',
 ) -> str:
     """
-    Mutable content: <Prior Thinking> and <Session File Info>. Changes every turn.
+    Mutable content: <Prior Thinking>, <Session File Info>, and optional <Session Memory>.
     """
     parts = []
     if session_file_summary:
@@ -113,6 +114,14 @@ def get_dynamic_plan_user_block(
             f"""
 <Session File Info>
 {session_file_summary}
+"""
+        )
+    if short_term_memory:
+        parts.append(
+            f"""
+<Session Memory>
+{short_term_memory.strip()}
+</Session Memory>
 """
         )
     if thinking_context:
@@ -134,12 +143,15 @@ def get_plan_make_instruction(
     available_tools_with_info: str,
     thinking_context: str = '',
     session_file_summary: str = '',
+    short_term_memory: str = '',
 ) -> str:
     """
-    Returns a single prompt: static content (tools + rules) then dynamic (session + thinking).
+    Returns a single prompt: static content (tools + rules) then dynamic (session + memory + thinking).
     """
     static = get_static_plan_system_block(available_tools_with_info)
-    dynamic = get_dynamic_plan_user_block(thinking_context, session_file_summary)
+    dynamic = get_dynamic_plan_user_block(
+        thinking_context, session_file_summary, short_term_memory
+    )
     if not dynamic:
         return static
     return static + '\n\n' + dynamic
