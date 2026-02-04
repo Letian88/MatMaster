@@ -23,6 +23,8 @@ def get_static_system_block(available_tools_with_info: str) -> str:
     return f"""You are the Planning Engine. Your goal is to design a rigid, executable workflow based on the available tools.
 You must follow the Structured Reasoning Protocol below and output your reasoning inside the specified XML tags.
 
+**Format requirements:** Step name: bold (e.g. **Step 1**); Tool name: wrapped in backticks (e.g. `surface_cutting`). One line per step with proper indentation (end with end-of-line).
+
 <thinking_protocol>
     <phase_1_analysis>
         Deconstruct user intent into Input Data (Source) and Desired Output (Target).
@@ -158,6 +160,7 @@ def get_static_revision_system_block(available_tools_with_info: str) -> str:
 </Available Tools With Info>
 
 ### VALIDATION CHECKLIST
+Ask, analysis, and answer [True/False] without hedging and assuming:
 1. **Prerequisites**: Does every step have its inputs satisfied by a *previous* step or *user input*?
 2. **Type Match**: Does the final step output what the user actually asked for?
 3. **Over-extension**: Did the plan invent steps the user didn't ask for (e.g., running a full simulation when asked for a tutorial)?
