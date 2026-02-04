@@ -48,7 +48,10 @@ from agents.matmaster_agent.flow_agents.execution_agent.agent import (
 )
 from agents.matmaster_agent.flow_agents.expand_agent.agent import ExpandAgent
 from agents.matmaster_agent.flow_agents.expand_agent.constant import EXPAND_AGENT
-from agents.matmaster_agent.flow_agents.expand_agent.prompt import EXPAND_INSTRUCTION
+from agents.matmaster_agent.flow_agents.expand_agent.prompt import (
+    EXPAND_INSTRUCTION,
+    build_expand_context,
+)
 from agents.matmaster_agent.flow_agents.expand_agent.schema import ExpandSchema
 from agents.matmaster_agent.flow_agents.handle_upload_agent.agent import (
     HandleUploadAgent,
@@ -358,21 +361,10 @@ class MatMasterFlowAgent(LlmAgent):
         EXPAND_INPUT_EXAMPLES_PROMPT = expand_input_examples(icl_examples)
         logger.info(f'{ctx.session.id} {EXPAND_INPUT_EXAMPLES_PROMPT}')
         # 2. 动态构造 instruction（记忆 + 会话已有文件，避免“第二步”仍从头 expand）
-        instruction_parts = []
-        if short_term_memory_block:
-            instruction_parts.append(
-                '# SHORT-TERM WORKING MEMORY (use when expanding):\n'
-                + short_term_memory_block
-                + '\n\n'
-            )
-        if session_file_summary:
-            instruction_parts.append(
-                '# SESSION FILES (already produced in this session — if user refers to "第一步/上一步/刚才" and these exist, expand ONLY the new step, do NOT re-add structure building):\n'
-                + session_file_summary
-                + '\n\n'
-            )
-        instruction_parts.append(EXPAND_INSTRUCTION + EXPAND_INPUT_EXAMPLES_PROMPT)
-        self.expand_agent.instruction = ''.join(instruction_parts)
+        context = build_expand_context(short_term_memory_block, session_file_summary)
+        self.expand_agent.instruction = (
+            context + EXPAND_INSTRUCTION + EXPAND_INPUT_EXAMPLES_PROMPT
+        )
         # 3. 运行 Agent
         async for expand_event in self.expand_agent.run_async(ctx):
             yield expand_event
