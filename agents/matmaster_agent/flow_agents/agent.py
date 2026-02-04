@@ -360,7 +360,7 @@ class MatMasterFlowAgent(LlmAgent):
         )
         EXPAND_INPUT_EXAMPLES_PROMPT = expand_input_examples(icl_examples)
         logger.info(f'{ctx.session.id} {EXPAND_INPUT_EXAMPLES_PROMPT}')
-        # 2. 动态构造 instruction（记忆 + 会话已有文件，避免“第二步”仍从头 expand）
+        # 2. 动态构造 instruction
         context = build_expand_context(short_term_memory_block, session_file_summary)
         self.expand_agent.instruction = (
             context + EXPAND_INSTRUCTION + EXPAND_INPUT_EXAMPLES_PROMPT
