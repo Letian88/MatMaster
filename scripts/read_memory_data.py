@@ -2,7 +2,7 @@
 Read and print MatMaster session memory via the memory FastAPI service.
 
 Uses agents.matmaster_agent.services.memory (same HTTP client as agent).
-Default URL: MEMORY_SERVICE_URL from constant; override with --url or env MEMORY_SERVICE_URL.
+Default URL: 101.126.90.82:8002 (constant); override with --url.
 
 Usage (from project root):
     uv run python scripts/read_memory_data.py
