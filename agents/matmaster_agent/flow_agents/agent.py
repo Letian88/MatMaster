@@ -1,7 +1,6 @@
 import copy
 import json
 import logging
-import time
 from asyncio import CancelledError
 from typing import AsyncGenerator
 
@@ -541,15 +540,8 @@ class MatMasterFlowAgent(LlmAgent):
         self.memory_writer_agent.instruction = get_memory_writer_instruction(
             UPDATE_USER_CONTENT, plan_intro, is_long_context=is_long_context
         )
-        t0 = time.perf_counter()
         async for _ in self.memory_writer_agent.run_async(ctx):
             pass
-        elapsed = time.perf_counter() - t0
-        logger.info(
-            '%s memory_writer_agent LLM elapsed %.3fs',
-            ctx.session.id,
-            elapsed,
-        )
         output = ctx.session.state.get('memory_writer_output') or {}
         insights = output.get('insights', []) if isinstance(output, dict) else []
         if insights:
