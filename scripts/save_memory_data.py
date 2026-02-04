@@ -10,6 +10,7 @@ Usage (from project root):
 """
 
 import argparse
+import asyncio
 import sys
 import time
 from pathlib import Path
@@ -26,7 +27,7 @@ from agents.matmaster_agent.services.memory import memory_write  # noqa: E402
 MOCK_DOC_TEMPLATE = 'mock insight #{n}: session_id={sid} (for testing read_memory_data)'
 
 
-def main() -> None:
+async def main() -> None:
     parser = argparse.ArgumentParser(
         description='Mock-write MatMaster session memory via the memory FastAPI service'
     )
@@ -76,4 +77,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())

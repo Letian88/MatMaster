@@ -11,6 +11,7 @@ Usage (from project root):
 """
 
 import argparse
+import asyncio
 import sys
 import time
 from pathlib import Path
@@ -27,7 +28,7 @@ from agents.matmaster_agent.services.memory import memory_list  # noqa: E402
 SESSION_ID_METADATA_KEY = 'session_id'
 
 
-def main() -> None:
+async def main() -> None:
     parser = argparse.ArgumentParser(
         description='Read MatMaster session memory via the memory FastAPI service'
     )
@@ -93,4 +94,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())

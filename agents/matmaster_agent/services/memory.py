@@ -1,7 +1,7 @@
 """
 HTTP client for the remote MatMaster memory service (FastAPI).
 
-Provides: memory_write, memory_retrieve, memory_list, format_short_term_memory.
+Provides: memory_write, memory_retrieve, memory_list, format_short_term_memory (all async).
 Base URL is from constant (101.126.90.82:8002); scripts can override via base_url.
 Timeouts: connect 3s, read 10s.
 """
@@ -9,7 +9,7 @@ Timeouts: connect 3s, read 10s.
 import logging
 from typing import Any, Optional
 
-import requests
+import aiohttp
 
 from agents.matmaster_agent.constant import MEMORY_SERVICE_URL
 
@@ -27,7 +27,7 @@ def _base(base_url: Optional[str] = None) -> str:
     return url.rstrip('/')
 
 
-def memory_write(
+async def memory_write(
     session_id: str,
     text: str,
     metadata: Optional[dict[str, Any]] = None,
@@ -40,17 +40,21 @@ def memory_write(
         'metadata': metadata or {},
     }
     try:
-        r = requests.post(
-            f'{_base(base_url)}{_MEMORY_PATH}/write',
-            json=payload,
-            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+        timeout = aiohttp.ClientTimeout(
+            connect=_CONNECT_TIMEOUT,
+            total=_CONNECT_TIMEOUT + _READ_TIMEOUT,
         )
-        r.raise_for_status()
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.post(
+                f'{_base(base_url)}{_MEMORY_PATH}/write',
+                json=payload,
+            ) as r:
+                r.raise_for_status()
     except Exception as e:
         logger.warning('memory_write failed: %s', e)
 
 
-def memory_retrieve(
+async def memory_retrieve(
     session_id: str,
     query: str,
     limit: int = 10,
@@ -63,13 +67,17 @@ def memory_retrieve(
         'n_results': limit,
     }
     try:
-        r = requests.post(
-            f'{_base(base_url)}{_MEMORY_PATH}/retrieve',
-            json=payload,
-            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+        timeout = aiohttp.ClientTimeout(
+            connect=_CONNECT_TIMEOUT,
+            total=_CONNECT_TIMEOUT + _READ_TIMEOUT,
         )
-        r.raise_for_status()
-        data = r.json()
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.post(
+                f'{_base(base_url)}{_MEMORY_PATH}/retrieve',
+                json=payload,
+            ) as r:
+                r.raise_for_status()
+                data = await r.json()
         docs = data.get('data') or []
         if not isinstance(docs, list):
             return []
@@ -86,7 +94,7 @@ def memory_retrieve(
         return []
 
 
-def memory_list(
+async def memory_list(
     session_id: Optional[str] = None,
     limit: Optional[int] = None,
     base_url: Optional[str] = None,
@@ -98,13 +106,17 @@ def memory_list(
     if limit is not None:
         payload['limit'] = limit
     try:
-        r = requests.post(
-            f'{_base(base_url)}{_MEMORY_PATH}/list',
-            json=payload,
-            timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
+        timeout = aiohttp.ClientTimeout(
+            connect=_CONNECT_TIMEOUT,
+            total=_CONNECT_TIMEOUT + _READ_TIMEOUT,
         )
-        r.raise_for_status()
-        data = r.json()
+        async with aiohttp.ClientSession(timeout=timeout) as client:
+            async with client.post(
+                f'{_base(base_url)}{_MEMORY_PATH}/list',
+                json=payload,
+            ) as r:
+                r.raise_for_status()
+                data = await r.json()
         raw = data.get('data')
         if not isinstance(raw, list):
             return []
@@ -125,7 +137,7 @@ def memory_list(
         return []
 
 
-def format_short_term_memory(
+async def format_short_term_memory(
     query_text: str,
     session_id: str,
     base_url: Optional[str] = None,
@@ -135,7 +147,7 @@ def format_short_term_memory(
     Retrieve session memory for the given query and format as a single block
     for injection into prompts. Returns empty string if no memory or on error.
     """
-    texts = memory_retrieve(
+    texts = await memory_retrieve(
         session_id=session_id,
         query=query_text or 'general',
         limit=limit,

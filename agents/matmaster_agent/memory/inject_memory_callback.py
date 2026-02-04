@@ -60,7 +60,7 @@ async def inject_memory_before_model_impl(
     if not session_id:
         return
     query = _query_from_request_and_state(callback_context, llm_request)
-    block = format_short_term_memory(
+    block = await format_short_term_memory(
         query_text=query or 'tool parameters', session_id=session_id
     )
     if not block or not block.strip():

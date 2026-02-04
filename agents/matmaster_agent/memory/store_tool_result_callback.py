@@ -79,7 +79,7 @@ def store_tool_result_in_memory(func: Any) -> Any:
             logger.debug('store_tool_result_in_memory: no session_id, skip')
             return inner_result
         summary = _format_tool_result_summary(tool, args, tool_response)
-        memory_write(
+        await memory_write(
             session_id=session_id,
             text=summary,
             metadata={'tool': tool.name, 'source': 'tool_result'},

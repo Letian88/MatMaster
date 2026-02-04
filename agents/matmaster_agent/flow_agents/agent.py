@@ -1,6 +1,7 @@
 import copy
 import json
 import logging
+import time
 from asyncio import CancelledError
 from typing import AsyncGenerator
 
@@ -438,7 +439,7 @@ class MatMasterFlowAgent(LlmAgent):
             if ctx.user_content and ctx.user_content.parts
             else ''
         )
-        short_term_memory_block = format_short_term_memory(
+        short_term_memory_block = await format_short_term_memory(
             query_text=query_for_memory,
             session_id=ctx.session.id,
         )
@@ -540,8 +541,15 @@ class MatMasterFlowAgent(LlmAgent):
         self.memory_writer_agent.instruction = get_memory_writer_instruction(
             UPDATE_USER_CONTENT, plan_intro, is_long_context=is_long_context
         )
+        t0 = time.perf_counter()
         async for _ in self.memory_writer_agent.run_async(ctx):
             pass
+        elapsed = time.perf_counter() - t0
+        logger.info(
+            '%s memory_writer_agent LLM elapsed %.3fs',
+            ctx.session.id,
+            elapsed,
+        )
         output = ctx.session.state.get('memory_writer_output') or {}
         insights = output.get('insights', []) if isinstance(output, dict) else []
         if insights:
@@ -549,7 +557,9 @@ class MatMasterFlowAgent(LlmAgent):
             written = 0
             for text in insights:
                 if isinstance(text, str) and text.strip():
-                    memory_write(session_id=session_id, text=text.strip(), metadata={})
+                    await memory_write(
+                        session_id=session_id, text=text.strip(), metadata={}
+                    )
                     written += 1
             logger.info(
                 '%s memory_writer wrote %d insight(s) to memory',
@@ -740,7 +750,7 @@ class MatMasterFlowAgent(LlmAgent):
                         analysis_text += cur
                     yield analysis_event
                 if analysis_text.strip():
-                    memory_write(
+                    await memory_write(
                         session_id=ctx.session.id,
                         text=f"Plan execution summary: {analysis_text.strip()}",
                         metadata={'source': 'execution_summary'},
@@ -762,7 +772,7 @@ class MatMasterFlowAgent(LlmAgent):
 
                 if report_markdown.strip():
                     excerpt = report_markdown.strip()[:5000]
-                    memory_write(
+                    await memory_write(
                         session_id=ctx.session.id,
                         text=f"Plan execution report (excerpt): {excerpt}",
                         metadata={'source': 'execution_report'},
@@ -841,7 +851,7 @@ class MatMasterFlowAgent(LlmAgent):
     ) -> AsyncGenerator[Event, None]:
         # 先取短期记忆和会话已有文件，再扩写，避免第二步仍从头 expand（如“第一步的Fe，扩胞到20A”只做扩胞）
         raw_user_text = ctx.user_content.parts[0].text if ctx.user_content.parts else ''
-        short_term_memory_block = format_short_term_memory(
+        short_term_memory_block = await format_short_term_memory(
             raw_user_text, ctx.session.id
         )
         session_files = await get_session_files(ctx.session.id)
