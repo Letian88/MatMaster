@@ -6,7 +6,6 @@ matmaster.egg-info/
 
 build/**
 .env*
-data/
 dpdispatcher.log
 dependency*
 PKG*
