@@ -217,19 +217,8 @@ class ThinkingAgent(DisallowTransferAndContentLimitLlmAgent):
                     for ev in revision_events:
                         yield ev
                     break
-                # Correction output: continue only if model explicitly requests another verification round
-                _wants_another = (
-                    _last_line(round_text).strip().upper()
-                    == FIRST_ROUND_NEED_REVISION.upper()
-                )
-                if not _wants_another:
-                    # No explicit request for verification → stop; use corrected plan as final
-                    thinking_text = _strip_first_round_marker(round_text)
-                    for ev in revision_events:
-                        yield ev
-                    break
-                # Explicit "Revision needed." → use correction and run another verification round
-                thinking_text = round_text
+                # Validation found errors: next round MUST be validation again until PASS. Use corrected output as input for next round.
+                thinking_text = _strip_first_round_marker(round_text)
                 for ev in revision_events:
                     yield ev
 

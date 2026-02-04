@@ -50,11 +50,13 @@ You must follow the Structured Reasoning Protocol below and output your reasonin
         3. **Output Format for Each Step** (inside your <simulation> tag):
            For each step N, state exactly:
            - "Step N requires Input Type A. Current State provides Type B. [PASS / FAIL]. [If FAIL: Insert Converter Tool.]"
+           You MUST give a definite verdict: use only PASS or FAIL. Do not use hedging (e.g. "可能", "perhaps", "maybe").
            No step may be proposed without its inputs being available (Backward Chaining).
     </phase_3_simulation_and_verification>
 
     <phase_4_final_plan>
         Output the validated linear sequence of steps.
+        List the tool names you use in this plan, one per line (e.g. "Tools used: tool_a", "tool_b", ...).
     </phase_4_final_plan>
 </thinking_protocol>
 
@@ -83,6 +85,7 @@ Step 2: [Tool Name]. Step 2 requires Input Type [A]. Current State provides [B].
 <plan_proposal>
 1. [Tool Name]: [Brief Description]
 2. ...
+Tools used (list each by name): [tool_name_1], [tool_name_2], ...
 </plan_proposal>
 Revision needed
 """
@@ -151,30 +154,30 @@ def get_static_revision_system_block(available_tools_with_info: str) -> str:
     """Immutable content for the plan validator: role, checklist, output format, tools."""
     return f"""You are the Plan Validator. Review the previous reasoning for logical flaws, missing dependencies, or hallucinated tools.
 
-### VALIDATION CHECKLIST
-1. **Prerequisites**: Does every step have its inputs satisfied by a *previous* step or *user input*?
-2. **Type Match**: Does the final step output what the user actually asked for?
-3. **Over-extension**: Did the plan invent steps the user didn't ask for (e.g., running a full simulation when asked for a tutorial)?
-
-### OUTPUT FORMAT
-If the plan is VALID:
-<validation_log>[Explain what you checked and why it passes]</validation_log>
-Verification passed.
-
-If the plan is INVALID:
-<validation_log>[Explain the specific error found]</validation_log>
-<corrected_plan>[Provide the full corrected plan sequence]</corrected_plan>
-[Your reasoning for the correction]
-Then:
-- If you want one more validation round, end with exactly: Revision needed.
-- If your corrected plan is final and no further check is needed, do NOT add "Revision needed." (we will use your corrected plan as final).
-
 ### STATIC CONTEXT (Tools)
 <Available Tools With Info>
 {available_tools_with_info}
 </Available Tools With Info>
 
-End with "Verification passed." ONLY if all prerequisites are met. Otherwise, provide the correction and optionally "Revision needed." only when you explicitly want another validation round.
+### VALIDATION CHECKLIST
+1. **Prerequisites**: Does every step have its inputs satisfied by a *previous* step or *user input*?
+2. **Type Match**: Does the final step output what the user actually asked for?
+3. **Over-extension**: Did the plan invent steps the user didn't ask for (e.g., running a full simulation when asked for a tutorial)?
+
+In your validation_log you MUST list the tool names used in the plan, one by one (e.g. "Tools used: tool_a, tool_b, ..."). Use only names from <Available Tools With Info>.
+
+### OUTPUT FORMAT
+If the plan is VALID (all checks definitively pass):
+<validation_log>[List tools used by name; explain what you checked and why it passes. Use only PASS/FAIL, no hedging ("可能", "perhaps", "maybe").]</validation_log>
+Verification passed.
+
+If the plan is INVALID:
+<validation_log>[List tools used by name; explain the specific error. Give a definite FAIL where applicable.]</validation_log>
+<corrected_plan>[Provide the full corrected plan sequence]</corrected_plan>
+[Your reasoning for the correction]
+The system will automatically run another validation round on your corrected plan. Continue until you can output "Verification passed." when all checks pass.
+
+End with "Verification passed." ONLY when all prerequisites definitively pass. Do not use hedging; say PASS or FAIL clearly.
 """
 
 
