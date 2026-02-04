@@ -581,15 +581,11 @@ class MatMasterFlowAgent(LlmAgent):
             None,
             ModelRole,
             {
-                'matmaster_flow_args': json.dumps(
-                    {
-                        'title': plan_title,
-                        'status': 'start',
-                        'font_color': '#30B37F',
-                        'bg_color': '#EFF8F5',
-                        'border_color': '#B2E0CE',
-                    }
-                )
+                'title': plan_title,
+                'status': 'start',
+                'font_color': '#30B37F',
+                'bg_color': '#EFF8F5',
+                'border_color': '#B2E0CE',
             },
         ):
             yield matmaster_flow_event
@@ -626,15 +622,11 @@ class MatMasterFlowAgent(LlmAgent):
             None,
             ModelRole,
             {
-                'matmaster_flow_args': json.dumps(
-                    {
-                        'title': plan_title,
-                        'status': 'end',
-                        'font_color': '#30B37F',
-                        'bg_color': '#EFF8F5',
-                        'border_color': '#B2E0CE',
-                    }
-                )
+                'title': plan_title,
+                'status': 'end',
+                'font_color': '#30B37F',
+                'bg_color': '#EFF8F5',
+                'border_color': '#B2E0CE',
             },
         ):
             yield matmaster_flow_event
@@ -722,15 +714,11 @@ class MatMasterFlowAgent(LlmAgent):
                     None,
                     ModelRole,
                     {
-                        'matmaster_flow_args': json.dumps(
-                            {
-                                'title': i18n.t('PlanSummary'),
-                                'status': 'start',
-                                'font_color': '#9479F7',
-                                'bg_color': '#F5F3FF',
-                                'border_color': '#CFC3FC',
-                            }
-                        )
+                        'title': i18n.t('PlanSummary'),
+                        'status': 'start',
+                        'font_color': '#9479F7',
+                        'bg_color': '#F5F3FF',
+                        'border_color': '#CFC3FC',
                     },
                 ):
                     yield matmaster_flow_event
@@ -803,15 +791,11 @@ class MatMasterFlowAgent(LlmAgent):
                     None,
                     ModelRole,
                     {
-                        'matmaster_flow_args': json.dumps(
-                            {
-                                'title': i18n.t('PlanSummary'),
-                                'status': 'end',
-                                'font_color': '#9479F7',
-                                'bg_color': '#F5F3FF',
-                                'border_color': '#CFC3FC',
-                            }
-                        )
+                        'title': i18n.t('PlanSummary'),
+                        'status': 'end',
+                        'font_color': '#9479F7',
+                        'bg_color': '#F5F3FF',
+                        'border_color': '#CFC3FC',
                     },
                 ):
                     yield matmaster_flow_event
@@ -973,17 +957,11 @@ class MatMasterFlowAgent(LlmAgent):
                     None,
                     ModelRole,
                     {
-                        'matmaster_flow_args': json.dumps(
-                            {
-                                'title': active_flow.get('title', ''),
-                                'status': 'end',
-                                'font_color': active_flow.get('font_color', '#0E6DE8'),
-                                'bg_color': active_flow.get('bg_color', '#EBF2FB'),
-                                'border_color': active_flow.get(
-                                    'border_color', '#B7D3F7'
-                                ),
-                            }
-                        )
+                        'title': active_flow.get('title', ''),
+                        'status': 'end',
+                        'font_color': active_flow.get('font_color', '#0E6DE8'),
+                        'bg_color': active_flow.get('bg_color', '#EBF2FB'),
+                        'border_color': active_flow.get('border_color', '#B7D3F7'),
                     },
                 ):
                     yield matmaster_flow_event
