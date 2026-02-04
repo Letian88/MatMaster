@@ -56,7 +56,6 @@ You must follow the Structured Reasoning Protocol below and output your reasonin
 
     <phase_4_final_plan>
         Output the validated linear sequence of steps.
-        List the tool names you use in this plan, one per line (e.g. "Tools used: tool_a", "tool_b", ...).
     </phase_4_final_plan>
 </thinking_protocol>
 
@@ -85,7 +84,6 @@ Step 2: [Tool Name]. Step 2 requires Input Type [A]. Current State provides [B].
 <plan_proposal>
 1. [Tool Name]: [Brief Description]
 2. ...
-Tools used (list each by name): [tool_name_1], [tool_name_2], ...
 </plan_proposal>
 Revision needed
 """
