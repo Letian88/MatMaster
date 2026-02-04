@@ -527,12 +527,15 @@ class MatMasterFlowAgent(LlmAgent):
         plans = plan_info.get('plans', [])
         plan_intro = intro
         if plans:
-            first = plans[0]
-            desc = first.get('plan_description', '')
-            steps_brief = '; '.join(
-                s.get('step_description', '')[:60] for s in first.get('steps', [])[:5]
-            )
-            plan_intro = f"{intro}\n\n方案摘要: {desc}\n步骤: {steps_brief}"
+            parts = [intro]
+            for i, plan in enumerate(plans):
+                desc = plan.get('plan_description', '')
+                steps_brief = '; '.join(
+                    s.get('step_description', '')[:60]
+                    for s in plan.get('steps', [])[:5]
+                )
+                parts.append(f"方案{i + 1}摘要: {desc}\n步骤: {steps_brief}")
+            plan_intro = '\n\n'.join(parts)
         is_long_context = len(UPDATE_USER_CONTENT) >= LONG_CONTEXT_THRESHOLD
         self.memory_writer_agent.instruction = get_memory_writer_instruction(
             UPDATE_USER_CONTENT, plan_intro, is_long_context=is_long_context
