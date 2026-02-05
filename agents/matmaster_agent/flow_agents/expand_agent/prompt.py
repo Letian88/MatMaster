@@ -1,3 +1,5 @@
+from agents.matmaster_agent.utils.sanitize_braces import with_sanitized_braces
+
 # --- Context section headers (injected before EXPAND_INSTRUCTION when present) ---
 SECTION_SHORT_TERM_MEMORY = 'SHORT-TERM WORKING MEMORY'
 SECTION_SESSION_FILES = 'SESSION FILES'
@@ -13,6 +15,7 @@ SESSION_FILES_SECTION_HEADER = (
 )
 
 
+@with_sanitized_braces('short_term_memory_block', 'session_file_summary')
 def build_expand_context(
     short_term_memory_block: str = '',
     session_file_summary: str = '',

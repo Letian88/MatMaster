@@ -147,6 +147,7 @@ from agents.matmaster_agent.utils.io_oss import (
     ReportUploadParams,
     upload_report_md_to_oss,
 )
+from agents.matmaster_agent.utils.sanitize_braces import sanitize_braces
 
 logger = logging.getLogger(__name__)
 logger.addFilter(PrefixFilter(MATMASTER_AGENT_NAME))
@@ -370,9 +371,9 @@ class MatMasterFlowAgent(LlmAgent):
             yield expand_event
 
     async def _build_icl_prompt(self, ctx: InvocationContext):
-        UPDATE_USER_CONTENT = (
-            '\nUSER INPUT FOR THIS TASK:\n'
-            + ctx.session.state['expand']['update_user_content']
+        raw_content = ctx.session.state['expand']['update_user_content']
+        UPDATE_USER_CONTENT = '\nUSER INPUT FOR THIS TASK:\n' + sanitize_braces(
+            raw_content
         )
         icl_update_examples = select_update_examples(
             ctx.session.state['expand']['update_user_content'],

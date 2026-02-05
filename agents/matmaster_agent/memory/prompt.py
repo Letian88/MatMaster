@@ -1,3 +1,7 @@
+from agents.matmaster_agent.utils.sanitize_braces import (
+    with_sanitized_braces,
+)
+
 # Threshold (chars) above which we treat user context as "literature / long context".
 LONG_CONTEXT_THRESHOLD = 2500
 
@@ -5,6 +9,7 @@ LONG_CONTEXT_THRESHOLD = 2500
 LONG_CONTEXT_MAX_INSIGHTS = 25
 
 
+@with_sanitized_braces('user_context', 'plan_intro')
 def get_memory_writer_instruction(
     user_context: str,
     plan_intro: str,
