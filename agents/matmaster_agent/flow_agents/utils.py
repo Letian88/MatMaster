@@ -163,20 +163,29 @@ def has_self_check(current_tool_name: str) -> bool:
     return tool.get('self_check', False)
 
 
+def scenes_contain_query_job_status(ctx: InvocationContext) -> bool:
+    """True when current scenes include query_job_status (e.g. 查询任务/查看任务状态)."""
+    scenes = ctx.session.state.get('scenes') or []
+    query_value = SceneEnum.QUERY_JOB_STATUS.value
+    return any(getattr(s, 'value', s) == query_value for s in scenes)
+
+
 def is_plan_confirmed(ctx: InvocationContext) -> bool:
     # 1) 原有：前端状态里已确认
     biz_state = ctx.session.state.get(FRONTEND_STATE_KEY, {}).get(BIZ, {})
     if biz_state.get(PLAN_CONFIRM, False):
         return True
 
-    # 2) 新增：用户输入匹配“方案 + 数字”（方案和数字间允许空格）
+    # 2) 用户输入匹配“方案 + 数字”（方案和数字间允许空格）
     try:
         text = (ctx.user_content.parts[0].text or '').strip()
     except Exception:
         text = ''
-
-    # 仅匹配纯数字：方案1 / 方案 1 / 方案   12
     if re.match(r'^\s*方案\s*\d+\s*$', text):
+        return True
+
+    # 3) 查询任务/任务状态场景：仅查任务状态或结果，无需用户点确认，直接视为已确认
+    if scenes_contain_query_job_status(ctx):
         return True
 
     return False
