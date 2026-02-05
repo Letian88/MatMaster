@@ -18,11 +18,7 @@ def sanitize_braces(text: str) -> str:
     """
     if not text:
         return text
-    return (
-        text.replace('\\', '\\\\')
-        .replace('{', '\\{')
-        .replace('}', '\\}')
-    )
+    return text.replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
 
 
 def with_sanitized_braces(*param_names: str):
