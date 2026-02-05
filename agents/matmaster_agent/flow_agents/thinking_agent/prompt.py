@@ -7,6 +7,8 @@ so that prefix caching (e.g. Anthropic cache_control) can maximize hit rates.
 
 from typing import TypedDict
 
+from agents.matmaster_agent.utils.sanitize_braces import with_sanitized_braces
+
 
 class ThinkingPromptBlocks(TypedDict):
     """Separated blocks for system (static) and user (dynamic) message assembly."""
@@ -92,6 +94,12 @@ Revision needed
 """
 
 
+@with_sanitized_braces(
+    'session_file_summary',
+    'original_query',
+    'expanded_query',
+    'short_term_memory',
+)
 def get_dynamic_user_block(
     session_file_summary: str,
     original_query: str,
@@ -202,6 +210,13 @@ End with "Verification passed." ONLY when all prerequisites definitively pass. D
 """
 
 
+@with_sanitized_braces(
+    'session_file_summary',
+    'original_query',
+    'expanded_query',
+    'previous_reasoning',
+    'short_term_memory',
+)
 def get_dynamic_revision_user_block(
     session_file_summary: str,
     original_query: str,

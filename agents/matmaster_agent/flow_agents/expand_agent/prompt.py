@@ -12,7 +12,10 @@ SESSION_FILES_SECTION_HEADER = (
     'and these files exist, expand only the new step; do not re-add structure-building steps.\n\n'
 )
 
+from agents.matmaster_agent.utils.sanitize_braces import with_sanitized_braces
 
+
+@with_sanitized_braces('short_term_memory_block', 'session_file_summary')
 def build_expand_context(
     short_term_memory_block: str = '',
     session_file_summary: str = '',

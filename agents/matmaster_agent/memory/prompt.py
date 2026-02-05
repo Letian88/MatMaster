@@ -4,7 +4,12 @@ LONG_CONTEXT_THRESHOLD = 2500
 # Max insights for long context (literature / expert intuition).
 LONG_CONTEXT_MAX_INSIGHTS = 25
 
+from agents.matmaster_agent.utils.sanitize_braces import (
+    with_sanitized_braces,
+)
 
+
+@with_sanitized_braces('user_context', 'plan_intro')
 def get_memory_writer_instruction(
     user_context: str,
     plan_intro: str,
