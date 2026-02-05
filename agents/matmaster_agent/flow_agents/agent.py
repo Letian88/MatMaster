@@ -411,9 +411,7 @@ class MatMasterFlowAgent(LlmAgent):
         """True when user intent is only to query task/job status (no thinking needed)."""
         scenes = ctx.session.state.get('scenes') or []
         query_status_value = SceneEnum.QUERY_JOB_STATUS.value
-        return any(
-            getattr(s, 'value', s) == query_status_value for s in scenes
-        )
+        return any(getattr(s, 'value', s) == query_status_value for s in scenes)
 
     async def _run_plan_make_agent(
         self,
@@ -512,7 +510,10 @@ class MatMasterFlowAgent(LlmAgent):
                         if parts_text.strip():
                             last_full_text = parts_text.strip()
                 thinking_text = (last_full_text or '').strip()
-                if getattr(self._thinking_agent, '_last_thinking_text', None) is not None:
+                if (
+                    getattr(self._thinking_agent, '_last_thinking_text', None)
+                    is not None
+                ):
                     thinking_text = self._thinking_agent._last_thinking_text
                 logger.info(
                     f'{ctx.session.id} reasoning_agent result length={len(thinking_text)}, '
