@@ -97,6 +97,7 @@ from agents.matmaster_agent.flow_agents.utils import (
     check_plan,
     get_tools_list,
     is_plan_confirmed,
+    scenes_contain_query_job_status,
     should_bypass_confirmation,
 )
 from agents.matmaster_agent.llm_config import MatMasterLlmConfig
@@ -407,7 +408,12 @@ class MatMasterFlowAgent(LlmAgent):
         yield update_state_event(ctx, state_delta={'scenes': copy.deepcopy(scenes)})
 
     async def _run_plan_make_agent(
-        self, ctx: InvocationContext, UPDATE_USER_CONTENT, TOOLCHAIN_EXAMPLES_PROMPT
+        self,
+        ctx: InvocationContext,
+        UPDATE_USER_CONTENT,
+        TOOLCHAIN_EXAMPLES_PROMPT,
+        *,
+        skip_thinking: bool = False,
     ) -> AsyncGenerator[Event, None]:
         # 制定计划
         if check_plan(ctx) == FlowStatusEnum.FAILED:
@@ -471,41 +477,49 @@ class MatMasterFlowAgent(LlmAgent):
         )
         expanded_query = expand_state.get('update_user_content', '')
 
-        # Thinking: loop (and optional revision) is handled inside ThinkingAgent
+        # Thinking: skip for "query job status only" (e.g. 查看任务状态); run otherwise
         thinking_text = ''
-        try:
-            self._thinking_agent.set_thinking_params(
-                available_tools_with_info_str,
-                session_file_summary,
-                original_query,
-                expanded_query,
-                short_term_memory=short_term_memory_block,
-            )
-            last_full_text = ''
-            async for thinking_event in self._thinking_agent.run_async(ctx):
-                yield thinking_event
+        if not skip_thinking:
+            try:
+                self._thinking_agent.set_thinking_params(
+                    available_tools_with_info_str,
+                    session_file_summary,
+                    original_query,
+                    expanded_query,
+                    short_term_memory=short_term_memory_block,
+                )
+                last_full_text = ''
+                async for thinking_event in self._thinking_agent.run_async(ctx):
+                    yield thinking_event
+                    if (
+                        not getattr(thinking_event, 'partial', True)
+                        and getattr(thinking_event, 'content', None)
+                        and getattr(thinking_event.content, 'parts', None)
+                    ):
+                        parts_text = ''.join(
+                            p.text or ''
+                            for p in thinking_event.content.parts
+                            if getattr(p, 'text', None)
+                        )
+                        if parts_text.strip():
+                            last_full_text = parts_text.strip()
+                thinking_text = (last_full_text or '').strip()
                 if (
-                    not getattr(thinking_event, 'partial', True)
-                    and getattr(thinking_event, 'content', None)
-                    and getattr(thinking_event.content, 'parts', None)
+                    getattr(self._thinking_agent, '_last_thinking_text', None)
+                    is not None
                 ):
-                    parts_text = ''.join(
-                        p.text or ''
-                        for p in thinking_event.content.parts
-                        if getattr(p, 'text', None)
-                    )
-                    if parts_text.strip():
-                        last_full_text = parts_text.strip()
-            thinking_text = (last_full_text or '').strip()
-            if getattr(self._thinking_agent, '_last_thinking_text', None) is not None:
-                thinking_text = self._thinking_agent._last_thinking_text
+                    thinking_text = self._thinking_agent._last_thinking_text
+                logger.info(
+                    f'{ctx.session.id} reasoning_agent result length={len(thinking_text)}, '
+                    f'preview={repr(thinking_text[:300]) if thinking_text else "empty"}'
+                )
+            except Exception as e:
+                logger.warning(
+                    f'{ctx.session.id} reasoning_agent failed: {e}, proceed without thinking'
+                )
+        else:
             logger.info(
-                f'{ctx.session.id} reasoning_agent result length={len(thinking_text)}, '
-                f'preview={repr(thinking_text[:300]) if thinking_text else "empty"}'
-            )
-        except Exception as e:
-            logger.warning(
-                f'{ctx.session.id} reasoning_agent failed: {e}, proceed without thinking'
+                f'{ctx.session.id} skip reasoning_agent (query_job_status_only)'
             )
 
         self.plan_make_agent.instruction = get_plan_make_instruction(
@@ -873,13 +887,18 @@ class MatMasterFlowAgent(LlmAgent):
             yield update_state_event(ctx, state_delta={PLAN: {}, MULTI_PLANS: {}})
 
         # 制定计划（1. 无计划；2. 计划已完成；3. 计划失败；4. 用户未确认计划）
+        # 仅查询任务状态时跳过 thinking（查任务状态不 thinking）
+        skip_thinking = scenes_contain_query_job_status(ctx)
         if check_plan(ctx) in [
             FlowStatusEnum.NO_PLAN,
             FlowStatusEnum.COMPLETE,
             FlowStatusEnum.FAILED,
         ] or not is_plan_confirmed(ctx):
             async for _plan_make_event in self._run_plan_make_agent(
-                ctx, UPDATE_USER_CONTENT, TOOLCHAIN_EXAMPLES_PROMPT
+                ctx,
+                UPDATE_USER_CONTENT,
+                TOOLCHAIN_EXAMPLES_PROMPT,
+                skip_thinking=skip_thinking,
             ):
                 yield _plan_make_event
 
