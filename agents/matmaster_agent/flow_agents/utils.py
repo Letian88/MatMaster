@@ -163,7 +163,7 @@ def has_self_check(current_tool_name: str) -> bool:
     return tool.get('self_check', False)
 
 
-def _scenes_contain_query_job_status(ctx: InvocationContext) -> bool:
+def scenes_contain_query_job_status(ctx: InvocationContext) -> bool:
     """True when current scenes include query_job_status (e.g. 查询任务/查看任务状态)."""
     scenes = ctx.session.state.get('scenes') or []
     query_value = SceneEnum.QUERY_JOB_STATUS.value
@@ -185,7 +185,7 @@ def is_plan_confirmed(ctx: InvocationContext) -> bool:
         return True
 
     # 3) 查询任务/任务状态场景：仅查任务状态或结果，无需用户点确认，直接视为已确认
-    if _scenes_contain_query_job_status(ctx):
+    if scenes_contain_query_job_status(ctx):
         return True
 
     return False

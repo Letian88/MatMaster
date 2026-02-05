@@ -75,7 +75,6 @@ from agents.matmaster_agent.flow_agents.report_agent.prompt import (
     get_report_instruction,
 )
 from agents.matmaster_agent.flow_agents.scene_agent.constant import SCENE_AGENT
-from agents.matmaster_agent.flow_agents.scene_agent.model import SceneEnum
 from agents.matmaster_agent.flow_agents.scene_agent.prompt import SCENE_INSTRUCTION
 from agents.matmaster_agent.flow_agents.scene_agent.schema import SceneSchema
 from agents.matmaster_agent.flow_agents.schema import FlowStatusEnum
@@ -98,6 +97,7 @@ from agents.matmaster_agent.flow_agents.utils import (
     check_plan,
     get_tools_list,
     is_plan_confirmed,
+    scenes_contain_query_job_status,
     should_bypass_confirmation,
 )
 from agents.matmaster_agent.llm_config import MatMasterLlmConfig
@@ -406,12 +406,6 @@ class MatMasterFlowAgent(LlmAgent):
         scenes = list(set(before_scenes + single_scene + ['universal']))
         logger.info(f'{ctx.session.id} scenes = {scenes}')
         yield update_state_event(ctx, state_delta={'scenes': copy.deepcopy(scenes)})
-
-    def _is_query_job_status_only(self, ctx: InvocationContext) -> bool:
-        """True when user intent is only to query task/job status (no thinking needed)."""
-        scenes = ctx.session.state.get('scenes') or []
-        query_status_value = SceneEnum.QUERY_JOB_STATUS.value
-        return any(getattr(s, 'value', s) == query_status_value for s in scenes)
 
     async def _run_plan_make_agent(
         self,
@@ -894,7 +888,7 @@ class MatMasterFlowAgent(LlmAgent):
 
         # 制定计划（1. 无计划；2. 计划已完成；3. 计划失败；4. 用户未确认计划）
         # 仅查询任务状态时跳过 thinking（查任务状态不 thinking）
-        skip_thinking = self._is_query_job_status_only(ctx)
+        skip_thinking = scenes_contain_query_job_status(ctx)
         if check_plan(ctx) in [
             FlowStatusEnum.NO_PLAN,
             FlowStatusEnum.COMPLETE,
