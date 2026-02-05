@@ -45,6 +45,7 @@ from agents.matmaster_agent.utils.event_utils import (
     context_function_event,
     update_state_event,
 )
+from agents.matmaster_agent.utils.sanitize_braces import sanitize_braces
 
 logger = logging.getLogger(__name__)
 logger.addFilter(PrefixFilter(MATMASTER_AGENT_NAME))
@@ -211,8 +212,15 @@ class MatMasterSupervisorAgent(DisallowTransferAndContentLimitLlmAgent):
         current_tool_description = ctx.session.state[PLAN]['steps'][index][
             STEP_DESCRIPTION
         ]
+        user_text = (
+            ctx.user_content.parts[0].text
+            if ctx.user_content and ctx.user_content.parts
+            else ''
+        )
+        user_text = sanitize_braces(user_text)
+        current_tool_description = sanitize_braces(current_tool_description or '')
         lines = (
-            f"用户原始请求: {ctx.user_content.parts[0].text}",
+            f"用户原始请求: {user_text}",
             f"当前步骤描述: {current_tool_description}",
             f"工具名称: {current_tool_name}",
             '请根据以上信息判断，工具的参数配置及对应的执行结果是否严格满足用户原始需求。',

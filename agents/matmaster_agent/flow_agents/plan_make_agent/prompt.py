@@ -1,3 +1,6 @@
+from agents.matmaster_agent.utils.sanitize_braces import with_sanitized_braces
+
+
 def get_static_plan_system_block(available_tools_with_info: str) -> str:
     """
     Immutable content: persona, tool list (heaviest component), output format and constraints.
@@ -100,6 +103,7 @@ Before returning the final JSON, verify:
 """
 
 
+@with_sanitized_braces('thinking_context', 'session_file_summary', 'short_term_memory')
 def get_dynamic_plan_user_block(
     thinking_context: str = '',
     session_file_summary: str = '',
