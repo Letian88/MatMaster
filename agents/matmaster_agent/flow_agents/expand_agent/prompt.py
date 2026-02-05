@@ -1,3 +1,5 @@
+from agents.matmaster_agent.utils.sanitize_braces import with_sanitized_braces
+
 # --- Context section headers (injected before EXPAND_INSTRUCTION when present) ---
 SECTION_SHORT_TERM_MEMORY = 'SHORT-TERM WORKING MEMORY'
 SECTION_SESSION_FILES = 'SESSION FILES'
@@ -11,8 +13,6 @@ SESSION_FILES_SECTION_HEADER = (
     'Files already produced in this session. If the user refers to a previous step (e.g. "第一步", "上一步", "刚才") '
     'and these files exist, expand only the new step; do not re-add structure-building steps.\n\n'
 )
-
-from agents.matmaster_agent.utils.sanitize_braces import with_sanitized_braces
 
 
 @with_sanitized_braces('short_term_memory_block', 'session_file_summary')

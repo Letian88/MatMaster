@@ -1,12 +1,12 @@
+from agents.matmaster_agent.utils.sanitize_braces import (
+    with_sanitized_braces,
+)
+
 # Threshold (chars) above which we treat user context as "literature / long context".
 LONG_CONTEXT_THRESHOLD = 2500
 
 # Max insights for long context (literature / expert intuition).
 LONG_CONTEXT_MAX_INSIGHTS = 25
-
-from agents.matmaster_agent.utils.sanitize_braces import (
-    with_sanitized_braces,
-)
 
 
 @with_sanitized_braces('user_context', 'plan_intro')
