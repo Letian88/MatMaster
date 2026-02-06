@@ -607,6 +607,7 @@ class MatMasterFlowAgent(LlmAgent):
                     {
                         'matmaster_thinking_ui_args': json.dumps(
                             {
+                                'title': '已思考',
                                 'status': 'end',
                             }
                         )
