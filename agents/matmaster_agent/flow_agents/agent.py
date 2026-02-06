@@ -42,6 +42,8 @@ from agents.matmaster_agent.flow_agents.constant import (
     MATMASTER_FLOW,
     MATMASTER_FLOW_PLANS,
     MATMASTER_GENERATE_NPS,
+    MATMASTER_INTENT_UI,
+    MATMASTER_THINKING_UI,
 )
 from agents.matmaster_agent.flow_agents.execution_agent.agent import (
     MatMasterSupervisorAgent,
@@ -368,8 +370,41 @@ class MatMasterFlowAgent(LlmAgent):
             context + EXPAND_INSTRUCTION + EXPAND_INPUT_EXAMPLES_PROMPT
         )
         # 3. 运行 Agent
+        for _intent_ui_event in context_function_event(
+            ctx,
+            self.name,
+            MATMASTER_INTENT_UI,
+            None,
+            ModelRole,
+            {
+                'matmaster_intent_ui_args': json.dumps(
+                    {
+                        'title': '正在进行用户问题扩写...',
+                        'status': 'start',
+                    }
+                )
+            },
+        ):
+            yield _intent_ui_event
+
         async for expand_event in self.expand_agent.run_async(ctx):
             yield expand_event
+
+        for _intent_ui_event in context_function_event(
+            ctx,
+            self.name,
+            MATMASTER_INTENT_UI,
+            None,
+            ModelRole,
+            {
+                'matmaster_intent_ui_args': json.dumps(
+                    {
+                        'status': 'end',
+                    }
+                )
+            },
+        ):
+            yield _intent_ui_event
 
     async def _build_icl_prompt(self, ctx: InvocationContext):
         raw_content = ctx.session.state['expand']['update_user_content']
@@ -397,8 +432,41 @@ class MatMasterFlowAgent(LlmAgent):
             SCENE_INSTRUCTION + UPDATE_USER_CONTENT + SCENE_EXAMPLES_PROMPT
         )
         # 3. 运行 Agent
+        for _intent_ui_event in context_function_event(
+            ctx,
+            self.name,
+            MATMASTER_INTENT_UI,
+            None,
+            ModelRole,
+            {
+                'matmaster_intent_ui_args': json.dumps(
+                    {
+                        'title': '正在进行场景划分...',
+                        'status': 'start',
+                    }
+                )
+            },
+        ):
+            yield _intent_ui_event
+
         async for scene_event in self.scene_agent.run_async(ctx):
             yield scene_event
+
+        for _intent_ui_event in context_function_event(
+            ctx,
+            self.name,
+            MATMASTER_INTENT_UI,
+            None,
+            ModelRole,
+            {
+                'matmaster_intent_ui_args': json.dumps(
+                    {
+                        'status': 'end',
+                    }
+                )
+            },
+        ):
+            yield _intent_ui_event
 
         # 4. 将之前的场景带到后面的会话中去
         before_scenes = ctx.session.state['scenes']
@@ -481,6 +549,23 @@ class MatMasterFlowAgent(LlmAgent):
         thinking_text = ''
         if not skip_thinking:
             try:
+                for _thinking_ui_event in context_function_event(
+                    ctx,
+                    self.name,
+                    MATMASTER_THINKING_UI,
+                    None,
+                    ModelRole,
+                    {
+                        'matmaster_thinking_ui_args': json.dumps(
+                            {
+                                'title': '正在思考',
+                                'status': 'start',
+                            }
+                        )
+                    },
+                ):
+                    yield _thinking_ui_event
+
                 self._thinking_agent.set_thinking_params(
                     available_tools_with_info_str,
                     session_file_summary,
@@ -513,6 +598,21 @@ class MatMasterFlowAgent(LlmAgent):
                     f'{ctx.session.id} reasoning_agent result length={len(thinking_text)}, '
                     f'preview={repr(thinking_text[:300]) if thinking_text else "empty"}'
                 )
+                for _thinking_ui_event in context_function_event(
+                    ctx,
+                    self.name,
+                    MATMASTER_THINKING_UI,
+                    None,
+                    ModelRole,
+                    {
+                        'matmaster_thinking_ui_args': json.dumps(
+                            {
+                                'status': 'end',
+                            }
+                        )
+                    },
+                ):
+                    yield _thinking_ui_event
             except Exception as e:
                 logger.warning(
                     f'{ctx.session.id} reasoning_agent failed: {e}, proceed without thinking'
@@ -961,8 +1061,41 @@ class MatMasterFlowAgent(LlmAgent):
 
             # 用户意图识别（一旦进入 research 模式，暂时无法退出）
             if ctx.session.state['intent'].get('type', None) != IntentEnum.RESEARCH:
+                for _intent_ui_event in context_function_event(
+                    ctx,
+                    self.name,
+                    MATMASTER_INTENT_UI,
+                    None,
+                    ModelRole,
+                    {
+                        'matmaster_intent_ui_args': json.dumps(
+                            {
+                                'title': '正在进行意图识别...',
+                                'status': 'start',
+                            }
+                        )
+                    },
+                ):
+                    yield _intent_ui_event
+
                 async for intent_event in self.intent_agent.run_async(ctx):
                     yield intent_event
+
+                for _intent_ui_event in context_function_event(
+                    ctx,
+                    self.name,
+                    MATMASTER_INTENT_UI,
+                    None,
+                    ModelRole,
+                    {
+                        'matmaster_intent_ui_args': json.dumps(
+                            {
+                                'status': 'end',
+                            }
+                        )
+                    },
+                ):
+                    yield _intent_ui_event
 
             # 如果用户上传文件，强制为 research 模式
             if (
