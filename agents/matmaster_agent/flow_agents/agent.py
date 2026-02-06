@@ -242,6 +242,7 @@ class MatMasterFlowAgent(LlmAgent):
             self.intent_agent,
             self.expand_agent,
             self.scene_agent,
+            self.thinking_agent,
             self.plan_make_agent,
             self.analysis_agent,
             self.report_agent,
@@ -273,6 +274,11 @@ class MatMasterFlowAgent(LlmAgent):
     @property
     def scene_agent(self) -> LlmAgent:
         return self._scene_agent
+
+    @computed_field
+    @property
+    def thinking_agent(self) -> LlmAgent:
+        return self._thinking_agent
 
     @computed_field
     @property
