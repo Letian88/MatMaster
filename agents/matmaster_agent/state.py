@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 # Special Key
 BIZ = 'biz'
 
@@ -13,3 +15,7 @@ PLAN_CONFIRM = 'plan_confirm'
 
 # Other Key
 STEP_DESCRIPTION = 'step_description'
+
+
+class StateKey(StrEnum):
+    pass
