@@ -266,9 +266,9 @@ class MatMasterSupervisorAgent(DisallowTransferAndContentLimitLlmAgent):
         update_plan = copy.deepcopy(ctx.session.state['plan'])
         update_plan['steps'][index]['status'] = PlanStepStatusEnum.PROCESS
         update_plan['steps'][index]['validation_failure_reason'] = validation_reason
-        original_description = ctx.session.state[PLAN]['steps'][index]['description']
+        original_description = ctx.session.state[PLAN]['steps'][index][STEP_DESCRIPTION]
         update_plan['steps'][index][
-            'description'
+            STEP_DESCRIPTION
         ] = f"{original_description}\n\n注意：上次执行因以下原因校验失败，请改进：{validation_reason}"
         yield update_state_event(ctx, state_delta={'plan': update_plan})
 
